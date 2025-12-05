@@ -13,11 +13,14 @@ interface RowData {
   sublevel?: number
   color?: string
   cells: CellData[]
-  computed?: boolean // <- marca linha calculada (Plano)
+  computed?: boolean
+  meta?: number // <- meta anual pré-definida por linha
 }
 
 const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
 
+// Exemplo com metas pré-definidas nos subníveis.
+// As metas dos “Planos” serão somadas automaticamente.
 const initialData: RowData[] = [
   {
     label: "Plano 1 - Expansão de Rede",
@@ -40,6 +43,7 @@ const initialData: RowData[] = [
   {
     label: "1.1 - Subestações",
     sublevel: 1,
+    meta: 350000, // exemplo de meta anual
     cells: [
       { value: 8817, type: "realizado" },
       { value: 12242, type: "realizado" },
@@ -58,6 +62,7 @@ const initialData: RowData[] = [
   {
     label: "1.2 - Linhas de Transmissão",
     sublevel: 1,
+    meta: 600000,
     cells: [
       { value: 29685, type: "realizado" },
       { value: 39691, type: "realizado" },
@@ -76,6 +81,7 @@ const initialData: RowData[] = [
   {
     label: "1.3 - Distribuição",
     sublevel: 1,
+    meta: 120000,
     cells: [
       { value: 2690, type: "realizado" },
       { value: 9386, type: "realizado" },
@@ -112,24 +118,13 @@ const initialData: RowData[] = [
   {
     label: "2.1 - Projeto Sistema Técnico BRR",
     sublevel: 1,
-    cells: [
-      { value: 0, type: "realizado" },
-      { value: 0, type: "realizado" },
-      { value: 0, type: "realizado" },
-      { value: 0, type: "realizado" },
-      { value: 0, type: "realizado" },
-      { value: 0, type: "realizado" },
-      { value: 0, type: "realizado" },
-      { value: 0, type: "realizado" },
-      { value: 0, type: "realizado" },
-      { value: 0, type: "realizado" },
-      { value: 0, type: "previsto" },
-      { value: 0, type: "previsto" },
-    ],
+    meta: 0,
+    cells: Array.from({ length: 12 }, () => ({ value: 0, type: "realizado" })),
   },
   {
     label: "2.2 - Projeto Operação EMS",
     sublevel: 1,
+    meta: 800, // exemplo
     cells: [
       { value: 22, type: "realizado" },
       { value: 30, type: "realizado" },
@@ -148,6 +143,7 @@ const initialData: RowData[] = [
   {
     label: "2.3 - Cybersecurity",
     sublevel: 1,
+    meta: 20000,
     cells: [
       { value: 581, type: "realizado" },
       { value: 0, type: "realizado" },
@@ -165,16 +161,16 @@ const initialData: RowData[] = [
   },
 ]
 
-// Soma os subníveis (sublevel === 1) para formar as linhas de "Plano"
+// Soma subníveis para formar as linhas “Plano” e agrega meta
 function computeAggregates(rows: RowData[]): RowData[] {
   const result = rows.map((r) => ({ ...r, cells: r.cells.map((c) => ({ ...c })) }))
 
   let i = 0
   while (i < result.length) {
     const row = result[i]
-    // Considera linha "Plano" como aquela sem sublevel (topo)
     if (row.sublevel === undefined) {
       const agg = Array(12).fill(0)
+      let metaSum = 0
 
       let j = i + 1
       while (j < result.length && result[j].sublevel === 1) {
@@ -182,13 +178,14 @@ function computeAggregates(rows: RowData[]): RowData[] {
           const val = typeof cell.value === "number" ? cell.value : 0
           agg[idx] += val
         })
+        metaSum += result[j].meta ?? 0
         j++
       }
 
-      // Atualiza a linha do Plano como calculada e não-editável
       result[i] = {
         ...row,
         computed: true,
+        meta: metaSum,
         cells: agg.map((v, idx) => ({
           value: v,
           type: idx < 10 ? "realizado" : "previsto",
@@ -227,7 +224,6 @@ export function CapexTable() {
     }).format(num)
   }
 
-  // Dados para renderização com os Planos agregados
   const displayData = computeAggregates(data)
 
   return (
@@ -247,6 +243,9 @@ export function CapexTable() {
               <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-40 bg-[#FFB81C] text-slate-900 font-bold">
                 MELHOR VISÃO
               </th>
+              <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-40 bg-slate-100 text-slate-900 font-bold">
+                META
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -257,9 +256,7 @@ export function CapexTable() {
               return (
                 <tr
                   key={rowIndex}
-                  className={`${
-                    row.color || (isSubLevel ? "bg-white" : "bg-slate-50")
-                  } border-b border-slate-200 hover:bg-slate-50 transition-colors`}
+                  className={`${row.color || (isSubLevel ? "bg-white" : "bg-slate-50")} border-b border-slate-200 hover:bg-slate-50 transition-colors`}
                 >
                   <td
                     className={`sticky left-0 z-10 border border-slate-200 px-4 py-3 font-medium ${
@@ -271,7 +268,6 @@ export function CapexTable() {
 
                   {row.cells.map((cell, cellIndex) => {
                     const isRealizado = cellIndex >= 0 && cellIndex <= 9
-                    // Editável apenas para subníveis (sublevel === 1) em nov/dez
                     const isEditable = row.sublevel === 1 && (cellIndex === 10 || cellIndex === 11)
 
                     return (
@@ -300,6 +296,9 @@ export function CapexTable() {
 
                   <td className="border border-slate-200 px-3 py-3 text-center font-bold text-slate-900 bg-[#fff3e0] min-w-40">
                     <span className="text-sm">{formatNumber(total)}</span>
+                  </td>
+                  <td className="border border-slate-200 px-3 py-3 text-center font-bold text-slate-900 bg-slate-100 min-w-40">
+                    <span className="text-sm">{formatNumber(row.meta ?? 0)}</span>
                   </td>
                 </tr>
               )
