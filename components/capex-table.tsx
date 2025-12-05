@@ -8,15 +8,20 @@ interface CellData {
   type: "realizado" | "previsto"
 }
 
+interface TransferEntry {
+  amount: number
+  to?: string // label do subplano de destino
+}
+
 interface RowData {
   label: string
-  sublevel?: number
+  sublevel?: number // undefined = Plano (topo), 1 = subplano
   color?: string
   cells: CellData[]
   computed?: boolean
   meta?: number
-  transfers?: number[]          // <- lista de transferências editáveis por linha
-  transferTotal?: number        // <- total (usado nas linhas de Plano)
+  transfers?: TransferEntry[]   // lançamentos desta linha (saídas)
+  transferNet?: number          // incoming - outgoing (para exibição)
 }
 
 const MONTHS = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"]
@@ -25,7 +30,7 @@ const initialData: RowData[] = [
   {
     label: "Plano 1 - Expansão de Rede",
     color: "bg-blue-50",
-    cells: [ /* ...seus 12 valores... */ 
+    cells: [
       { value: 41192, type: "realizado" },
       { value: 61320, type: "realizado" },
       { value: 79033, type: "realizado" },
@@ -44,7 +49,7 @@ const initialData: RowData[] = [
     label: "1.1 - Subestações",
     sublevel: 1,
     meta: 350000,
-    transfers: [], // comece vazio
+    transfers: [],
     cells: [
       { value: 8817, type: "realizado" }, { value: 12242, type: "realizado" },
       { value: 19116, type: "realizado" }, { value: 27885, type: "realizado" },
@@ -131,38 +136,66 @@ const initialData: RowData[] = [
   },
 ]
 
-function sumTransfers(row: RowData) {
-  return (row.transfers ?? []).reduce((s, n) => s + (Number.isFinite(n) ? n : 0), 0)
-}
+// helpers
+const sumOutgoing = (row: RowData) =>
+  (row.transfers ?? []).reduce((s, t) => s + (Number.isFinite(t.amount) ? t.amount : 0), 0)
 
-// Soma subníveis para Planos e agrega meta e transferências
-function computeAggregates(rows: RowData[]): RowData[] {
-  const result = rows.map((r) => ({ ...r, cells: r.cells.map((c) => ({ ...c })) }))
+// calcula display com:
+// - agregação dos Planos (meses e meta)
+// - transferência líquida por subplano (incoming - outgoing)
+// - transferência líquida do Plano = soma dos filhos
+function computeDisplay(rows: RowData[]): RowData[] {
+  // clone raso
+  const res = rows.map(r => ({ ...r, cells: r.cells.map(c => ({ ...c })) }))
 
+  // mapa de subplanos (label -> index)
+  const subIndex = new Map<string, number>()
+  res.forEach((r, i) => { if (r.sublevel === 1) subIndex.set(r.label, i) })
+
+  // outgoing por linha
+  const outgoing = res.map(sumOutgoing)
+
+  // incoming por linha (só conta se o destino for um subplano existente)
+  const incoming = Array(res.length).fill(0)
+  res.forEach((r) => {
+    (r.transfers ?? []).forEach(t => {
+      if (!t || !t.to) return
+      const idx = subIndex.get(t.to)
+      if (idx !== undefined && Number.isFinite(t.amount)) {
+        incoming[idx] += t.amount
+      }
+    })
+  })
+
+  // net por linha (subplano): incoming - outgoing
+  const net = res.map((_, i) => incoming[i] - outgoing[i])
+
+  // agrega Planos
   let i = 0
-  while (i < result.length) {
-    const row = result[i]
+  while (i < res.length) {
+    const row = res[i]
     if (row.sublevel === undefined) {
       const agg = Array(12).fill(0)
       let metaSum = 0
-      let transferSum = 0
+      let netSum = 0
 
       let j = i + 1
-      while (j < result.length && result[j].sublevel === 1) {
-        result[j].cells.forEach((cell, idx) => {
-          const val = typeof cell.value === "number" ? cell.value : 0
-          agg[idx] += val
+      while (j < res.length && res[j].sublevel === 1) {
+        res[j].cells.forEach((cell, idx) => {
+          agg[idx] += typeof cell.value === "number" ? cell.value : 0
         })
-        metaSum += result[j].meta ?? 0
-        transferSum += sumTransfers(result[j])
+        metaSum += res[j].meta ?? 0
+        netSum += net[j]
+        // carimba o net do subplano para render
+        res[j] = { ...res[j], transferNet: net[j] }
         j++
       }
 
-      result[i] = {
+      res[i] = {
         ...row,
         computed: true,
         meta: metaSum,
-        transferTotal: transferSum,
+        transferNet: netSum,
         cells: agg.map((v, idx) => ({
           value: v,
           type: idx < 10 ? "realizado" : "previsto",
@@ -170,13 +203,11 @@ function computeAggregates(rows: RowData[]): RowData[] {
       }
       i = j
     } else {
-      // opcional: carimbar o total de cada subnível para consumo direto
-      result[i] = { ...row, transferTotal: sumTransfers(row) }
       i++
     }
   }
 
-  return result
+  return res
 }
 
 export function CapexTable() {
@@ -189,18 +220,27 @@ export function CapexTable() {
     setData(newData)
   }
 
-  // Transferências: adicionar/editar/remover
+  // opções de destino = todos os subplanos
+  const sublevelOptions = data.filter(r => r.sublevel === 1).map(r => r.label)
+
+  // CRUD de transferências na linha (origem)
   const addTransfer = (rowIndex: number) => {
     const newData = [...data]
     const current = newData[rowIndex].transfers ?? []
-    newData[rowIndex].transfers = [...current, 0]
+    newData[rowIndex].transfers = [...current, { amount: 0, to: sublevelOptions[0] ?? "" }]
     setData(newData)
   }
-  const updateTransfer = (rowIndex: number, tIndex: number, value: string) => {
+  const updateTransferAmount = (rowIndex: number, tIndex: number, value: string) => {
     const newData = [...data]
     const list = [...(newData[rowIndex].transfers ?? [])]
-    const num = value === "" ? 0 : Number.parseFloat(value) || 0
-    list[tIndex] = num
+    list[tIndex] = { ...list[tIndex], amount: value === "" ? 0 : Number.parseFloat(value) || 0 }
+    newData[rowIndex].transfers = list
+    setData(newData)
+  }
+  const updateTransferTarget = (rowIndex: number, tIndex: number, to: string) => {
+    const newData = [...data]
+    const list = [...(newData[rowIndex].transfers ?? [])]
+    list[tIndex] = { ...list[tIndex], to }
     newData[rowIndex].transfers = list
     setData(newData)
   }
@@ -213,12 +253,14 @@ export function CapexTable() {
   }
 
   const calculateTotal = (rowCells: CellData[]) =>
-    rowCells.reduce((sum, cell) => sum + (typeof cell.value === "number" ? cell.value : 0), 0)
+    rowCells.reduce((sum, c) => sum + (typeof c.value === "number" ? c.value : 0), 0)
 
   const formatNumber = (num: number) =>
     new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(num)
 
-  const displayData = computeAggregates(data)
+  const formatSigned = (n: number) => `${n > 0 ? "+" : ""}${formatNumber(n)}`
+
+  const displayData = computeDisplay(data)
 
   return (
     <Card className="overflow-hidden border border-slate-200 shadow-lg">
@@ -240,18 +282,17 @@ export function CapexTable() {
               <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-40 bg-slate-100 text-slate-900 font-bold">
                 META
               </th>
-              <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-44 bg-indigo-50 text-slate-900 font-bold">
-                TRANSFERÊNCIA
+              <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-56 bg-indigo-50 text-slate-900 font-bold">
+                TRANSFERÊNCIA (líquida)
               </th>
             </tr>
           </thead>
           <tbody>
             {displayData.map((row, rowIndex) => {
               const total = calculateTotal(row.cells)
-              const isSubLevel = row.sublevel !== undefined
-              const transferTotal = row.computed
-                ? row.transferTotal ?? 0
-                : (row.transfers ?? []).reduce((s, n) => s + (Number.isFinite(n) ? n : 0), 0)
+              const isSubLevel = row.sublevel === 1
+              const isPlano = row.sublevel === undefined
+              const transferNet = row.transferNet ?? 0
 
               return (
                 <tr
@@ -268,7 +309,7 @@ export function CapexTable() {
 
                   {row.cells.map((cell, cellIndex) => {
                     const isRealizado = cellIndex <= 9
-                    const isEditable = row.sublevel === 1 && (cellIndex === 10 || cellIndex === 11)
+                    const isEditable = isSubLevel && (cellIndex === 10 || cellIndex === 11)
                     return (
                       <td
                         key={cellIndex}
@@ -300,33 +341,57 @@ export function CapexTable() {
                     <span className="text-sm">{formatNumber(row.meta ?? 0)}</span>
                   </td>
 
-                  <td className="border border-slate-200 px-3 py-3 text-center bg-indigo-50 min-w-44">
+                  <td className="border border-slate-200 px-3 py-3 text-center bg-indigo-50 min-w-56">
                     <div className="flex items-center justify-center gap-2">
-                      <span className="text-sm font-bold text-slate-900">
-                        {formatNumber(transferTotal)}
+                      <span
+                        className={`text-sm font-bold ${
+                          transferNet > 0 ? "text-emerald-700" : transferNet < 0 ? "text-red-700" : "text-slate-900"
+                        }`}
+                      >
+                        {formatSigned(transferNet)}
                       </span>
-                      {!row.computed && (
+
+                      {/* edição só nos subplanos */}
+                      {isSubLevel && (
                         <details className="relative">
                           <summary className="cursor-pointer text-xs text-indigo-700 underline decoration-dotted select-none">
                             editar
                           </summary>
-                          <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded shadow p-3 z-30 text-left">
-                            <div className="max-h-56 overflow-auto space-y-2">
+                          <div className="absolute right-0 mt-2 w-[460px] bg-white border border-slate-200 rounded shadow p-3 z-30 text-left">
+                            <div className="max-h-60 overflow-auto space-y-2">
                               {(row.transfers ?? []).map((t, tIdx) => (
-                                <div key={tIdx} className="flex items-center gap-2">
-                                  <input
-                                    type="number"
-                                    value={t === 0 ? "" : t}
-                                    onChange={(e) => updateTransfer(rowIndex, tIdx, e.target.value)}
-                                    className="w-full border border-slate-300 rounded px-2 py-1 text-sm"
-                                    placeholder="0"
-                                  />
-                                  <button
-                                    onClick={() => removeTransfer(rowIndex, tIdx)}
-                                    className="text-xs text-red-600 hover:underline"
-                                  >
-                                    remover
-                                  </button>
+                                <div key={tIdx} className="grid grid-cols-12 gap-2 items-end">
+                                  <div className="col-span-5">
+                                    <label className="text-[11px] text-slate-500">Valor (saída)</label>
+                                    <input
+                                      type="number"
+                                      value={t.amount === 0 ? "" : t.amount}
+                                      onChange={(e) => updateTransferAmount(rowIndex, tIdx, e.target.value)}
+                                      className="w-full border border-slate-300 rounded px-2 py-1 text-sm"
+                                      placeholder="0"
+                                    />
+                                  </div>
+                                  <div className="col-span-6">
+                                    <label className="text-[11px] text-slate-500">Destino (subplano)</label>
+                                    <select
+                                      value={t.to ?? ""}
+                                      onChange={(e) => updateTransferTarget(rowIndex, tIdx, e.target.value)}
+                                      className="w-full border border-slate-300 rounded px-2 py-1 text-sm bg-white"
+                                    >
+                                      <option value="" disabled>Selecione um subplano</option>
+                                      {sublevelOptions.map((opt) => (
+                                        <option key={opt} value={opt}>{opt}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div className="col-span-1">
+                                    <button
+                                      onClick={() => removeTransfer(rowIndex, tIdx)}
+                                      className="text-xs text-red-600 hover:underline"
+                                    >
+                                      x
+                                    </button>
+                                  </div>
                                 </div>
                               ))}
                               {(!row.transfers || row.transfers.length === 0) && (
@@ -343,6 +408,11 @@ export function CapexTable() {
                         </details>
                       )}
                     </div>
+                    {isPlano && (
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        Soma das transferências líquidas dos subplanos.
+                      </p>
+                    )}
                   </td>
                 </tr>
               )
@@ -362,7 +432,7 @@ export function CapexTable() {
         </p>
         <p className="text-sm text-slate-600">
           <span className="inline-block w-3 h-3 bg-indigo-50 border border-indigo-200 rounded mr-2"></span>
-          <strong>Transferência</strong> mostra a soma de todos os lançamentos de transferência da linha.
+          <strong>Transferência (líquida)</strong> = entradas − saídas.
         </p>
       </div>
     </Card>
