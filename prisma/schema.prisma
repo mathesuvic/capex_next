@@ -1,0 +1,52 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Plan {
+  id       Int       @id @default(autoincrement())
+  label    String
+  color    String?
+  order    Int       @default(0)
+  subplans Subplan[]
+}
+
+model Subplan {
+  id       Int            @id @default(autoincrement())
+  label    String
+  meta     Int            @default(0)
+  order    Int            @default(0)
+  planId   Int
+  plan     Plan           @relation(fields: [planId], references: [id])
+  values   MonthlyValue[]
+  outgoing Transfer[]     @relation("SubplanOutgoing")
+  incoming Transfer[]     @relation("SubplanIncoming")
+}
+
+model MonthlyValue {
+  id        Int     @id @default(autoincrement())
+  subplanId Int
+  month     Int
+  type      String
+  value     Float   @default(0)
+
+  @@unique([subplanId, month, type], name: "subplanId_month_type")
+}
+
+
+model Transfer {
+  id            Int @id @default(autoincrement())
+  fromSubplanId Int
+  toSubplanId   Int
+  amount        Int @default(0)
+
+  from Subplan @relation("SubplanOutgoing", fields: [fromSubplanId], references: [id])
+  to   Subplan @relation("SubplanIncoming", fields: [toSubplanId], references: [id])
+
+  @@index([fromSubplanId])
+  @@index([toSubplanId])
+}
