@@ -1,3 +1,4 @@
+// 1. Configuração da conexão (mantém a mesma)
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
@@ -7,20 +8,42 @@ generator client {
   provider = "prisma-client-js"
 }
 
-model Subplan {
-  id            Int            @id @default(autoincrement())
-  name          String?
-  monthlyValues MonthlyValue[]
+// 2. Modelo que mapeia a tabela capex_web
+model CapexWeb {
+  plano   String?   @db.VarChar(10)
+  capex   String    @db.VarChar(50)
+  jan_ano Decimal?
+  fev_ano Decimal?
+  mar_ano Decimal?
+  abr_ano Decimal?
+  mai_ano Decimal?
+  jun_ano Decimal?
+  jul_ano Decimal?
+  ago_ano Decimal?
+  set_ano Decimal?
+  out_ano Decimal?
+  nov_ano Decimal?
+  dez_ano Decimal?
+
+  // ADICIONADO: Relações para transferências
+  transfersFrom Transfer[] @relation("TransfersFrom")
+  transfersTo   Transfer[] @relation("TransfersTo")
+
+  @@id([capex])
+  @@map("capex_web")
 }
 
-model MonthlyValue {
-  id        Int     @id @default(autoincrement())
-  subplanId Int
-  month     Int
-  type      String
-  value     Decimal @db.Decimal(14, 2)
+// ADICIONADO: Modelo para a tabela de Transferências
+model Transfer {
+  id        Int    @id @default(autoincrement())
+  amount    Decimal
+  fromCapex String @db.VarChar(50)
+  toCapex   String @db.VarChar(50)
 
-  subplan Subplan @relation(fields: [subplanId], references: [id])
+  // Relações com a tabela CapexWeb
+  from      CapexWeb @relation("TransfersFrom", fields: [fromCapex], references: [capex])
+  to        CapexWeb @relation("TransfersTo", fields: [toCapex], references: [capex])
 
-  @@unique([subplanId, month, type])
+  // Mapeia para o nome da tabela no banco, ex: 'transfers'
+  @@map("transfers")
 }

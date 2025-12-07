@@ -293,124 +293,131 @@ export function CapexTable() {
   const displayData = computeDisplay(data)
 
   // Atualiza célula e persiste nov/dez para subplanos
-  const handleCellChange = async (row: RowData, rowIndex: number, cellIndex: number, value: string) => {
-    const numValue = value === "" ? 0 : Number.parseFloat(value) || 0
+  // Dentro de /components/capex-table.tsx
 
-    // Atualiza estado otimista
-    setData(prev => {
-      const copy = structuredClone(prev) as RowData[]
-      copy[rowIndex].cells[cellIndex].value = numValue
-      return copy
-    })
+const handleCellChange = async (row: RowData, rowIndex: number, cellIndex: number, value: string) => {
+  const numValue = value === "" ? 0 : Number.parseFloat(value) || 0;
 
-    // Persistir apenas para subplano e meses 11/12
-    if (row.sublevel === 1 && row.id && (cellIndex === 10 || cellIndex === 11)) {
-      try {
-        const month = cellIndex + 1
-        const type = row.cells[cellIndex].type
-        await fetch(`/api/capex/subplans/${row.id}/values`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ month, value: numValue, type }),
-        })
-      } catch (e) {
-        console.error(e)
-      }
+  // Atualiza estado otimista (continua igual)
+  setData(prev => {
+    const copy = structuredClone(prev) as RowData[];
+    copy[rowIndex].cells[cellIndex].value = numValue;
+    return copy;
+  });
+
+  // Persistir apenas para subplano e meses 11/12
+  if (row.sublevel === 1 && (cellIndex === 10 || cellIndex === 11)) {
+    try {
+      const month = cellIndex + 1;
+      
+      // MUDANÇA #1: A URL agora é estática
+      await fetch(`/api/capex/values`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        // MUDANÇA #2: Adicionamos 'label' ao corpo da requisição
+        body: JSON.stringify({ 
+          month: month, 
+          value: numValue,
+          label: row.label // Enviando o nome do CAPEX como identificador
+        }),
+      });
+    } catch (e) {
+      console.error(e);
     }
   }
+};
+
 
   // CRUD transferências (saídas) na linha
-  const addTransfer = async (rowIndex: number) => {
-    const row = data[rowIndex]
-    if (!row?.id) return
-    const dest = subplans.find(s => s.id && s.id !== row.id) || subplans[0]
-    if (!dest?.id) return
+  // Dentro de /components/capex-table.tsx
 
-    try {
-      const res = await fetch(`/api/capex/subplans/${row.id}/transfers`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ toId: dest.id, amount: 0 }),
-      })
-      const { id } = await res.json()
+const addTransfer = async (rowIndex: number) => {
+  const row = data[rowIndex];
+  // A validação agora deve ser pelo NOME (label), não pelo ID numérico
+  if (!row?.label) return;
 
-      setData(prev => {
-        const copy = structuredClone(prev) as RowData[]
-        const current = copy[rowIndex].transfers ?? []
-        copy[rowIndex].transfers = [...current, { id, amount: 0, to: dest.label, toId: dest.id }]
-        return copy
-      })
-    } catch (e) {
-      console.error(e)
+  // Encontra um destino válido (continua igual)
+  const dest = subplans.find(s => s.label && s.label !== row.label) || subplans[0];
+  if (!dest?.label) return;
+
+  try {
+    // CHAMADA PARA A NOVA ROTA ESTÁTICA
+    const res = await fetch(`/api/capex/transfers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // Enviando os NOMES (labels) em vez de IDs numéricos
+      body: JSON.stringify({
+        fromLabel: row.label,
+        toLabel: dest.label,
+        amount: 0,
+      }),
+    });
+    
+    if (!res.ok) {
+      throw new Error('Falha ao criar transferência na API');
     }
-  }
 
-  const updateTransferAmount = async (rowIndex: number, tIndex: number, value: string) => {
-    const amount = value === "" ? 0 : Number.parseFloat(value) || 0
+    // A API agora retorna o registro completo da transferência criada
+    const newTransfer = await res.json();
 
+    // Atualiza o estado do front-end com os dados retornados pela API
     setData(prev => {
-      const copy = structuredClone(prev) as RowData[]
-      const list = [...(copy[rowIndex].transfers ?? [])]
-      list[tIndex] = { ...list[tIndex], amount }
-      copy[rowIndex].transfers = list
-      return copy
-    })
+      const copy = structuredClone(prev) as RowData[];
+      const currentTransfers = copy[rowIndex].transfers ?? [];
+      
+      // Adiciona a nova transferência com o ID real do banco de dados
+      copy[rowIndex].transfers = [...currentTransfers, {
+        id: newTransfer.id,
+        amount: newTransfer.amount,
+        to: dest.label,
+      }];
+      return copy;
+    });
 
-    const t = data[rowIndex]?.transfers?.[tIndex]
-    if (t?.id) {
-      try {
-        await fetch(`/api/capex/transfers/${t.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount }),
-        })
-      } catch (e) {
-        console.error(e)
-      }
-    }
+  } catch (e) {
+    console.error("Erro ao adicionar transferência:", e);
   }
+};
 
-  const updateTransferTarget = async (rowIndex: number, tIndex: number, toLabel: string) => {
-    const dest = data.find(r => r.sublevel === 1 && r.label === toLabel)
-    setData(prev => {
-      const copy = structuredClone(prev) as RowData[]
-      const list = [...(copy[rowIndex].transfers ?? [])]
-      list[tIndex] = { ...list[tIndex], to: toLabel, toId: dest?.id }
-      copy[rowIndex].transfers = list
-      return copy
-    })
 
-    const t = data[rowIndex]?.transfers?.[tIndex]
-    if (t?.id && dest?.id) {
-      try {
-        await fetch(`/api/capex/transfers/${t.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ toId: dest.id }),
-        })
-      } catch (e) {
-        console.error(e)
-      }
-    }
-  }
+  const updateTransferAmount = (rowIndex: number, tIndex: number, value: string) => { // Removido 'async'
+  const amount = value === "" ? 0 : Number.parseFloat(value) || 0;
 
-  const removeTransfer = async (rowIndex: number, tIndex: number) => {
-    const t = data[rowIndex]?.transfers?.[tIndex]
-    setData(prev => {
-      const copy = structuredClone(prev) as RowData[]
-      const list = [...(copy[rowIndex].transfers ?? [])]
-      list.splice(tIndex, 1)
-      copy[rowIndex].transfers = list
-      return copy
-    })
-    if (t?.id) {
-      try {
-        await fetch(`/api/capex/transfers/${t.id}`, { method: "DELETE" })
-      } catch (e) {
-        console.error(e)
-      }
-    }
-  }
+  setData(prev => {
+    const copy = structuredClone(prev) as RowData[];
+    const list = [...(copy[rowIndex].transfers ?? [])];
+    list[tIndex] = { ...list[tIndex], amount };
+    copy[rowIndex].transfers = list;
+    return copy;
+  });
+  // Bloco 'try/catch' com fetch REMOVIDO
+};
+
+
+  const updateTransferTarget = (rowIndex: number, tIndex: number, toLabel: string) => { // Removido 'async'
+  const dest = data.find(r => r.sublevel === 1 && r.label === toLabel);
+  setData(prev => {
+    const copy = structuredClone(prev) as RowData[];
+    const list = [...(copy[rowIndex].transfers ?? [])];
+    list[tIndex] = { ...list[tIndex], to: toLabel, toId: dest?.id };
+    copy[rowIndex].transfers = list;
+    return copy;
+  });
+  // Bloco 'try/catch' com fetch REMOVIDO
+};
+
+
+  const removeTransfer = (rowIndex: number, tIndex: number) => { // Removido 'async'
+  setData(prev => {
+    const copy = structuredClone(prev) as RowData[];
+    const list = [...(copy[rowIndex].transfers ?? [])];
+    list.splice(tIndex, 1);
+    copy[rowIndex].transfers = list;
+    return copy;
+  });
+  // Bloco 'try/catch' com fetch REMOVIDO
+};
+
 
   // Dados do mapa (memo)
   const map = useMemo(() => buildTransferMatrix(data), [data])
