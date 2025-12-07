@@ -1,4 +1,5 @@
-// 1. Configuração da conexão (mantém a mesma)
+// Em prisma/schema.prisma
+
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
@@ -8,8 +9,9 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// 2. Modelo que mapeia a tabela capex_web
+// Modelo que mapeia a tabela capex_web
 model CapexWeb {
+  ordem   Int?      @default(0)
   plano   String?   @db.VarChar(10)
   capex   String    @db.VarChar(50)
   jan_ano Decimal?
@@ -24,8 +26,9 @@ model CapexWeb {
   out_ano Decimal?
   nov_ano Decimal?
   dez_ano Decimal?
+  meta Decimal?
 
-  // ADICIONADO: Relações para transferências
+  // Relações para transferências
   transfersFrom Transfer[] @relation("TransfersFrom")
   transfersTo   Transfer[] @relation("TransfersTo")
 
@@ -33,17 +36,16 @@ model CapexWeb {
   @@map("capex_web")
 }
 
-// ADICIONADO: Modelo para a tabela de Transferências
+// Modelo para a tabela de Transferências
 model Transfer {
-  id        Int    @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   amount    Decimal
-  fromCapex String @db.VarChar(50)
-  toCapex   String @db.VarChar(50)
+  fromCapex String   @db.VarChar(50)
+  toCapex   String   @db.VarChar(50)
 
   // Relações com a tabela CapexWeb
   from      CapexWeb @relation("TransfersFrom", fields: [fromCapex], references: [capex])
   to        CapexWeb @relation("TransfersTo", fields: [toCapex], references: [capex])
 
-  // Mapeia para o nome da tabela no banco, ex: 'transfers'
   @@map("transfers")
 }

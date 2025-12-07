@@ -1,62 +1,74 @@
-﻿import { NextResponse } from 'next/server'
+﻿// Em app/api/capex/route.ts
+
+import { NextResponse } from 'next/server'
 import { db } from '@/lib/prisma'
 
+/**
+ * @description Busca todos os dados de CAPEX e anexa as transferências relacionadas de forma eficiente.
+ */
 export async function GET() {
   try {
-    const rawDataFromDb = await db.capexWeb.findMany();
+    // 1. Busca os itens de CAPEX e todas as transferências em paralelo para maior performance.
+    const [capexItems, allTransfers] = await Promise.all([
+      db.capexWeb.findMany({
+        orderBy: { ordem: 'asc' } // Garante uma ordem consistente.
+      }),
+      db.transfer.findMany({
+        include: {
+          from: { select: { capex: true } }, // Inclui o label de origem.
+          to:   { select: { capex: true } },   // Inclui o label de destino.
+        }
+      })
+    ]);
 
-    // Usaremos um array simples, pois a ordem do banco de dados já é a correta
-    const finalData = [];
+    // 2. Cria um índice de transferências (Map) para fazer a junção dos dados em memória, o que é muito mais rápido.
+    const transfersByFromLabel = new Map<string, any[]>();
+    for (const transfer of allTransfers) {
+      const fromLabel = transfer.from.capex;
+      if (!transfersByFromLabel.has(fromLabel)) {
+        transfersByFromLabel.set(fromLabel, []);
+      }
+      // Adiciona a transferência formatada na lista correta.
+      transfersByFromLabel.get(fromLabel)?.push({
+        id: transfer.id,
+        amount: Number(transfer.amount), // Converte o tipo Decimal do Prisma para Number.
+        to: transfer.to.capex,
+      });
+    }
 
-    const monthMapping = [
-      { key: 'jan_ano', month: 1 }, { key: 'fev_ano', month: 2 },
-      { key: 'mar_ano', month: 3 }, { key: 'abr_ano', month: 4 },
-      { key: 'mai_ano', month: 5 }, { key: 'jun_ano', month: 6 },
-      { key: 'jul_ano', month: 7 }, { key: 'ago_ano', month: 8 },
-      { key: 'set_ano', month: 9 }, { key: 'out_ano', month: 10 },
-      { key: 'nov_ano', month: 11 }, { key: 'dez_ano', month: 12 },
+    // 3. Mapeia os dados do banco para o formato exato que o frontend precisa.
+    const monthMapping: (keyof typeof capexItems[0])[] = [
+      'jan_ano', 'fev_ano', 'mar_ano', 'abr_ano', 'mai_ano', 'jun_ano',
+      'jul_ano', 'ago_ano', 'set_ano', 'out_ano', 'nov_ano', 'dez_ano'
     ];
-
+    
     let planoCount = 0;
     const planoColors = ["bg-blue-50", "bg-green-50", "bg-yellow-50"];
 
-    // Itera sobre cada linha do banco de dados
-    for (const [index, dbRow] of rawDataFromDb.entries()) {
-      
-      const isSubLevel = dbRow.plano === 'sub' || dbRow.plano === 'subplano';
+    const finalData = capexItems.map((dbRow) => {
+      const isSubLevel = dbRow.plano?.startsWith('sub');
       const isPlano = dbRow.plano === 'plano';
+      
+      const cells = monthMapping.map((key, index) => ({
+        type: (index < 10) ? 'realizado' : 'previsto',
+        // Converte o valor Decimal/null para Number, garantindo que não quebre o JSON.
+        value: Number(dbRow[key]) || 0,
+      }));
 
-      // Monta a estrutura de Células (cells)
-      const cells = [];
-      for (const month of monthMapping) {
-        const key = month.key as keyof typeof dbRow;
-        const value = dbRow[key];
-
-        cells.push({
-          // LÓGICA CORRIGIDA: Define o tipo baseado no mês
-          type: month.month <= 10 ? 'realizado' : 'previsto',
-          // Garante que o valor é um número ou 0 se for nulo
-          value: Number(value) || 0,
-        });
-      }
-
-      // Monta a estrutura da Linha (RowData) completa
+      // Monta o objeto final da linha.
       const row = {
-        // ADICIONADO: 'id' é crucial para as funções de edição. Usamos o índice como fallback.
-        id: index, 
+        id: dbRow.id,
         label: dbRow.capex,
-        // CORRIGIDO: sublevel para bater com a lógica do componente
         sublevel: isSubLevel ? 1 : undefined,
-        // ADICIONADO: 'color' para os planos principais
         color: isPlano ? planoColors[planoCount++ % planoColors.length] : undefined,
         cells: cells,
-        // ADICIONADO: Campos que o componente espera, mesmo que com valores padrão
-        meta: 0, 
-        transfers: [], 
+        meta: Number(dbRow.meta) || 0,
+        // Anexa a lista de transferências que já agrupamos. Se não houver, anexa um array vazio.
+        transfers: transfersByFromLabel.get(dbRow.capex) || [],
       };
-
-      finalData.push(row);
-    }
+      
+      return row;
+    });
     
     return NextResponse.json(finalData, { status: 200 });
 
