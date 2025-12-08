@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { Card } from "@/components/ui/card"
 
-// --- Interfaces ---
 interface CellData {
   value: number | string
   type: "realizado" | "previsto"
@@ -19,25 +18,138 @@ interface TransferEntry {
 interface RowData {
   id?: number
   label: string
-  sublevel?: number
+  sublevel?: number // undefined = Plano (topo), 1 = subplano
   color?: string
   cells: CellData[]
   computed?: boolean
   meta?: number
-  transfers?: TransferEntry[]
+  transfers?: TransferEntry[] // saídas desta linha
   transferNet?: number
 }
 
-// --- Constantes ---
 const MONTHS = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"]
 
-// --- Funções Helper ---
+// Fallback local (usado só se o fetch da API falhar)
+const fallbackData: RowData[] = [
+  {
+    label: "Plano 1 - Expansão de Rede",
+    color: "bg-blue-50",
+    cells: [
+      { value: 41192, type: "realizado" },
+      { value: 61320, type: "realizado" },
+      { value: 79033, type: "realizado" },
+      { value: 79414, type: "realizado" },
+      { value: 90391, type: "realizado" },
+      { value: 97244, type: "realizado" },
+      { value: 63700, type: "realizado" },
+      { value: 81745, type: "realizado" },
+      { value: 97633, type: "realizado" },
+      { value: 127582, type: "realizado" },
+      { value: 105648, type: "previsto" },
+      { value: 88102, type: "previsto" },
+    ],
+  },
+  {
+    label: "1.1 - Subestações",
+    sublevel: 1,
+    meta: 350000,
+    transfers: [],
+    cells: [
+      { value: 8817, type: "realizado" }, { value: 12242, type: "realizado" },
+      { value: 19116, type: "realizado" }, { value: 27885, type: "realizado" },
+      { value: 30912, type: "realizado" }, { value: 28967, type: "realizado" },
+      { value: 19033, type: "realizado" }, { value: 25259, type: "realizado" },
+      { value: 19444, type: "realizado" }, { value: 25023, type: "realizado" },
+      { value: 37235, type: "previsto" },  { value: 41286, type: "previsto" },
+    ],
+  },
+  {
+    label: "1.2 - Linhas de Transmissão",
+    sublevel: 1,
+    meta: 600000,
+    transfers: [],
+    cells: [
+      { value: 29685, type: "realizado" }, { value: 39691, type: "realizado" },
+      { value: 53583, type: "realizado" }, { value: 44947, type: "realizado" },
+      { value: 52267, type: "realizado" }, { value: 57185, type: "realizado" },
+      { value: 37689, type: "realizado" }, { value: 59108, type: "realizado" },
+      { value: 58571, type: "realizado" }, { value: 89033, type: "realizado" },
+      { value: 53883, type: "previsto" },  { value: 28637, type: "previsto" },
+    ],
+  },
+  {
+    label: "1.3 - Distribuição",
+    sublevel: 1,
+    meta: 120000,
+    transfers: [],
+    cells: [
+      { value: 2690, type: "realizado" },  { value: 9386, type: "realizado" },
+      { value: 6335, type: "realizado" },  { value: 6295, type: "realizado" },
+      { value: 7212, type: "realizado" },  { value: 11112, type: "realizado" },
+      { value: 6978, type: "realizado" },  { value: 10047, type: "realizado" },
+      { value: 19618, type: "realizado" }, { value: 12920, type: "realizado" },
+      { value: 14529, type: "previsto" },  { value: 18176, type: "previsto" },
+    ],
+  },
+  {
+    label: "Plano 2 - Projetos Especiais",
+    color: "bg-green-50",
+    cells: [
+      { value: 0, type: "realizado" }, { value: 356, type: "realizado" },
+      { value: 8869, type: "realizado" }, { value: 413, type: "realizado" },
+      { value: 1021, type: "realizado" }, { value: 911, type: "realizado" },
+      { value: 1394, type: "realizado" }, { value: 787, type: "realizado" },
+      { value: 1285, type: "realizado" }, { value: 359, type: "realizado" },
+      { value: 9935, type: "previsto" },  { value: 8897, type: "previsto" },
+    ],
+  },
+  {
+    label: "2.1 - Projeto Sistema Técnico BRR",
+    sublevel: 1,
+    meta: 0,
+    transfers: [],
+    cells: Array.from({ length: 12 }, () => ({ value: 0, type: "realizado" })),
+  },
+  {
+    label: "2.2 - Projeto Operação EMS",
+    sublevel: 1,
+    meta: 800,
+    transfers: [],
+    cells: [
+      { value: 22, type: "realizado" }, { value: 30, type: "realizado" },
+      { value: 27, type: "realizado" }, { value: 28, type: "realizado" },
+      { value: 15, type: "realizado" }, { value: 23, type: "realizado" },
+      { value: 25, type: "realizado" }, { value: 30, type: "realizado" },
+      { value: 48, type: "realizado" }, { value: 38, type: "realizado" },
+      { value: 29, type: "previsto" },  { value: 62, type: "previsto" },
+    ],
+  },
+  {
+    label: "2.3 - Cybersecurity",
+    sublevel: 1,
+    meta: 20000,
+    transfers: [],
+    cells: [
+      { value: 581, type: "realizado" }, { value: 0, type: "realizado" },
+      { value: 889, type: "realizado" }, { value: 41, type: "realizado" },
+      { value: 549, type: "realizado" }, { value: 704, type: "realizado" },
+      { value: 1177, type: "realizado" }, { value: 572, type: "realizado" },
+      { value: 890, type: "realizado" }, { value: 11, type: "realizado" },
+      { value: 9906, type: "previsto" },  { value: 8835, type: "previsto" },
+    ],
+  },
+]
+
+// ===== Helpers =====
+
 function calculateTotal(rowCells: CellData[]) {
   return rowCells.reduce((sum, c) => sum + (typeof c.value === "number" ? c.value : 0), 0)
 }
 const formatNumber = (num: number) =>
   new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(num)
 const formatSigned = (n: number) => `${n > 0 ? "+" : ""}${formatNumber(n)}`
+
+// ===== Transferências (líquida) =====
 
 const sumOutgoing = (row: RowData) =>
   (row.transfers ?? []).reduce((s, t) => s + (Number.isFinite(t.amount) ? t.amount : 0), 0)
@@ -61,7 +173,7 @@ function buildIncomingIndex(rows: RowData[]) {
 }
 
 function computeDisplay(rows: RowData[]): RowData[] {
-  const res = structuredClone(rows);
+  const res = rows.map(r => ({ ...r, cells: r.cells.map(c => ({ ...c })) }))
   const subIndex = new Map<string, number>()
   res.forEach((r, i) => { if (r.sublevel === 1) subIndex.set(r.label, i) })
   const outgoing = res.map(sumOutgoing)
@@ -93,25 +205,69 @@ function computeDisplay(rows: RowData[]): RowData[] {
         j++
       }
       res[i] = {
-        ...row, computed: true, meta: metaSum, transferNet: netSum,
-        cells: agg.map((v, idx) => ({ value: v, type: idx < 10 ? "realizado" : "previsto" })),
+        ...row,
+        computed: true,
+        meta: metaSum,
+        transferNet: netSum,
+        cells: agg.map((v, idx) => ({
+          value: v,
+          type: idx < 10 ? "realizado" : "previsto",
+        })),
       }
       i = j
     } else {
-      if(res[i].transferNet === undefined){
-        res[i] = { ...res[i], transferNet: net[i] };
-      }
-      i++;
+      i++
     }
   }
   return res
 }
 
+// ===== Mapa de Transferências =====
+
+function buildTransferMatrix(rows: RowData[]) {
+  const labels = rows.filter(r => r.sublevel === 1).map(r => r.label)
+  const idxMap = new Map(labels.map((l, i) => [l, i] as const))
+  const n = labels.length
+  const matrix = Array.from({ length: n }, () => Array(n).fill(0))
+  const outgoing = Array(n).fill(0)
+  const incoming = Array(n).fill(0)
+
+  rows.forEach((r) => {
+    if (r.sublevel !== 1) return
+    const fromIdx = idxMap.get(r.label)!
+    ;(r.transfers ?? []).forEach(t => {
+      if (!t?.to || !Number.isFinite(t.amount)) return
+      const toIdx = idxMap.get(t.to)
+      if (toIdx == null) return
+      matrix[fromIdx][toIdx] += t.amount
+      outgoing[fromIdx] += t.amount
+      incoming[toIdx] += t.amount
+    })
+  })
+
+  const net = labels.map((_, i) => incoming[i] - outgoing[i])
+  const max = matrix.reduce((m, row) => Math.max(m, ...row), 0)
+  return { labels, matrix, outgoing, incoming, net, max }
+}
+
+function heatClass(v: number, max: number) {
+  if (v <= 0 || max <= 0) return "bg-white"
+  const q = v / max
+  if (q > 0.8) return "bg-emerald-400/60"
+  if (q > 0.6) return "bg-emerald-300/60"
+  if (q > 0.4) return "bg-emerald-200/60"
+  if (q > 0.2) return "bg-emerald-100/60"
+  return "bg-emerald-50"
+}
+
 export function CapexTable() {
   const [data, setData] = useState<RowData[]>([])
   const [mapOpen, setMapOpen] = useState(false)
-  const [openDetails, setOpenDetails] = useState<number | null>(null);
+  const [mapTab, setMapTab] = useState<"matrix" | "list">("matrix")
+  const [query, setQuery] = useState("")
+  const [hideZeros, setHideZeros] = useState(true)
 
+  // Carrega do backend
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -122,216 +278,274 @@ export function CapexTable() {
         if (!cancelled) setData(json as RowData[])
       } catch (e) {
         console.error(e)
+        if (!cancelled) setData(fallbackData) // fallback local
       }
     })()
     return () => { cancelled = true }
   }, [])
 
-  const displayData = useMemo(() => computeDisplay(data), [data]);
   const subplans = useMemo(
     () => data.filter(r => r.sublevel === 1).map(r => ({ label: r.label, id: r.id })),
     [data]
   )
   const sublevelOptions = subplans.map(s => s.label)
-  const incomingIndex = useMemo(() => buildIncomingIndex(data), [data]);
-  
-  const handleCellChange = async (row: RowData, rowIndex: number, cellIndex: number, value: string) => {
-    const numValue = value === "" ? 0 : Number.parseFloat(value) || 0;
-    setData(prev => {
-      const copy = structuredClone(prev) as RowData[];
-      const originalIndex = prev.findIndex(item => item.label === row.label);
-      if (originalIndex !== -1) {
-          copy[originalIndex].cells[cellIndex].value = numValue;
-      }
-      return copy;
-    });
-    if (row.sublevel === 1 && (cellIndex === 10 || cellIndex === 11)) {
-      try {
-        const month = cellIndex + 1;
-        await fetch(`/api/capex/values`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ month, value: numValue, label: row.label }),
-        });
-      } catch (e) { console.error(e); }
-    }
-  };
+  const incomingIndex = buildIncomingIndex(data)
+  const displayData = computeDisplay(data)
 
-  const addTransfer = async (rowIndex: number) => {
-    const originalRow = displayData[rowIndex];
-    if (!originalRow?.label) return;
-    const dest = subplans.find(s => s.label && s.label !== originalRow.label) || subplans[0];
-    if (!dest?.label) return;
-    try {
-      const res = await fetch(`/api/capex/transfers`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fromLabel: originalRow.label, toLabel: dest.label, amount: 0 }),
-      });
-      if (!res.ok) throw new Error('Falha ao criar transferência na API');
-      const newTransfer = await res.json();
-      setData(prev => {
-        const copy = structuredClone(prev) as RowData[];
-        const originalIndex = copy.findIndex(item => item.label === originalRow.label);
-        if (originalIndex !== -1) {
-          const currentTransfers = copy[originalIndex].transfers ?? [];
-          copy[originalIndex].transfers = [...currentTransfers, {
-            id: newTransfer.id,
-            amount: newTransfer.amount,
-            to: dest.label,
-          }];
-        }
-        return copy;
-      });
-    } catch (e) { console.error("Erro ao adicionar transferência:", e); }
-  };
+  // Atualiza célula e persiste nov/dez para subplanos
+  // Dentro de /components/capex-table.tsx
 
-  const updateTransferAmount = async (rowIndex: number, tIndex: number, value: string) => {
-    const amount = value === "" ? 0 : Number.parseFloat(value) || 0;
-    const rowLabel = displayData[rowIndex].label;
-    setData(prev => {
-      const copy = structuredClone(prev) as RowData[];
-      const originalIndex = copy.findIndex(item => item.label === rowLabel);
-      if (originalIndex !== -1) {
-        const list = [...(copy[originalIndex].transfers ?? [])];
-        list[tIndex] = { ...list[tIndex], amount };
-        copy[originalIndex].transfers = list;
-      }
-      return copy;
-    });
-    const transferToUpdate = data.find(r => r.label === rowLabel)?.transfers?.[tIndex];
-    if (!transferToUpdate?.id) return;
+const handleCellChange = async (row: RowData, rowIndex: number, cellIndex: number, value: string) => {
+  const numValue = value === "" ? 0 : Number.parseFloat(value) || 0;
+
+  // Atualiza estado otimista (continua igual)
+  setData(prev => {
+    const copy = structuredClone(prev) as RowData[];
+    copy[rowIndex].cells[cellIndex].value = numValue;
+    return copy;
+  });
+
+  // Persistir apenas para subplano e meses 11/12
+  if (row.sublevel === 1 && (cellIndex === 10 || cellIndex === 11)) {
     try {
-      await fetch(`/api/capex/transfers`, {
+      const month = cellIndex + 1;
+      
+      // MUDANÇA #1: A URL agora é estática
+      await fetch(`/api/capex/values`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: transferToUpdate.id, amount, toLabel: transferToUpdate.to }),
+        // MUDANÇA #2: Adicionamos 'label' ao corpo da requisição
+        body: JSON.stringify({ 
+          month: month, 
+          value: numValue,
+          label: row.label // Enviando o nome do CAPEX como identificador
+        }),
       });
-    } catch (e) { console.error("Erro ao atualizar valor da transferência:", e); }
-  };
+    } catch (e) {
+      console.error(e);
+    }
+  }
+};
 
-  const updateTransferTarget = async (rowIndex: number, tIndex: number, toLabel: string) => {
-    const rowLabel = displayData[rowIndex].label;
-    const dest = data.find(r => r.sublevel === 1 && r.label === toLabel);
+
+  // CRUD transferências (saídas) na linha
+  // Dentro de /components/capex-table.tsx
+
+const addTransfer = async (rowIndex: number) => {
+  const row = data[rowIndex];
+  // A validação agora deve ser pelo NOME (label), não pelo ID numérico
+  if (!row?.label) return;
+
+  // Encontra um destino válido (continua igual)
+  const dest = subplans.find(s => s.label && s.label !== row.label) || subplans[0];
+  if (!dest?.label) return;
+
+  try {
+    // CHAMADA PARA A NOVA ROTA ESTÁTICA
+    const res = await fetch(`/api/capex/transfers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // Enviando os NOMES (labels) em vez de IDs numéricos
+      body: JSON.stringify({
+        fromLabel: row.label,
+        toLabel: dest.label,
+        amount: 0,
+      }),
+    });
+    
+    if (!res.ok) {
+      throw new Error('Falha ao criar transferência na API');
+    }
+
+    // A API agora retorna o registro completo da transferência criada
+    const newTransfer = await res.json();
+
+    // Atualiza o estado do front-end com os dados retornados pela API
     setData(prev => {
       const copy = structuredClone(prev) as RowData[];
-      const originalIndex = copy.findIndex(item => item.label === rowLabel);
-      if(originalIndex !== -1) {
-        const list = [...(copy[originalIndex].transfers ?? [])];
-        list[tIndex] = { ...list[tIndex], to: toLabel, toId: dest?.id };
-        copy[originalIndex].transfers = list;
-      }
+      const currentTransfers = copy[rowIndex].transfers ?? [];
+      
+      // Adiciona a nova transferência com o ID real do banco de dados
+      copy[rowIndex].transfers = [...currentTransfers, {
+        id: newTransfer.id,
+        amount: newTransfer.amount,
+        to: dest.label,
+      }];
       return copy;
     });
-    const transferToUpdate = data.find(r => r.label === rowLabel)?.transfers?.[tIndex];
-    if (!transferToUpdate?.id) return;
-    try {
-      await fetch(`/api/capex/transfers`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: transferToUpdate.id, amount: transferToUpdate.amount, toLabel }),
-      });
-    } catch (e) { console.error("Erro ao atualizar destino da transferência:", e); }
-  };
 
-  const removeTransfer = async (rowIndex: number, tIndex: number) => {
-    const rowLabel = displayData[rowIndex].label;
-    const transferToRemove = data.find(r => r.label === rowLabel)?.transfers?.[tIndex];
-    if (!transferToRemove?.id) {
-      setData(prev => {
-        const copy = structuredClone(prev) as RowData[];
-        const originalIndex = copy.findIndex(item => item.label === rowLabel);
-        if(originalIndex !== -1){
-            const list = [...(copy[originalIndex].transfers ?? [])];
-            list.splice(tIndex, 1);
-            copy[originalIndex].transfers = list;
-        }
-        return copy;
-      });
-      return;
-    }
-    try {
-      const res = await fetch(`/api/capex/transfers?id=${transferToRemove.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Falha ao deletar transferência na API');
-      setData(prev => {
-         const copy = structuredClone(prev) as RowData[];
-         const originalIndex = copy.findIndex(item => item.label === rowLabel);
-         if(originalIndex !== -1){
-             const list = [...(copy[originalIndex].transfers ?? [])];
-             list.splice(tIndex, 1);
-             copy[originalIndex].transfers = list;
-         }
-         return copy;
-      });
-    } catch (e) { console.error("Erro ao remover transferência:", e); }
-  };
+  } catch (e) {
+    console.error("Erro ao adicionar transferência:", e);
+  }
+};
 
-  const loading = data.length === 0;
+
+  const updateTransferAmount = (rowIndex: number, tIndex: number, value: string) => { // Removido 'async'
+  const amount = value === "" ? 0 : Number.parseFloat(value) || 0;
+
+  setData(prev => {
+    const copy = structuredClone(prev) as RowData[];
+    const list = [...(copy[rowIndex].transfers ?? [])];
+    list[tIndex] = { ...list[tIndex], amount };
+    copy[rowIndex].transfers = list;
+    return copy;
+  });
+  // Bloco 'try/catch' com fetch REMOVIDO
+};
+
+
+  const updateTransferTarget = (rowIndex: number, tIndex: number, toLabel: string) => { // Removido 'async'
+  const dest = data.find(r => r.sublevel === 1 && r.label === toLabel);
+  setData(prev => {
+    const copy = structuredClone(prev) as RowData[];
+    const list = [...(copy[rowIndex].transfers ?? [])];
+    list[tIndex] = { ...list[tIndex], to: toLabel, toId: dest?.id };
+    copy[rowIndex].transfers = list;
+    return copy;
+  });
+  // Bloco 'try/catch' com fetch REMOVIDO
+};
+
+
+  // components/capex-table.tsx (substitua sua função atual)
+const removeTransfer = async (rowIndex: number, tIndex: number) => {
+  const t = data[rowIndex]?.transfers?.[tIndex];
+  if (!t?.id) {
+    console.warn("Sem id da transferência para deletar");
+    return;
+  }
+
+  // Snapshot para rollback
+  const snapshot = structuredClone(data) as RowData[];
+
+  // UI otimista
+  setData(prev => {
+    const copy = structuredClone(prev) as RowData[];
+    const list = [...(copy[rowIndex].transfers ?? [])];
+    list.splice(tIndex, 1);
+    copy[rowIndex].transfers = list;
+    return copy;
+  });
+
+  try {
+    const res = await fetch(`/api/capex/transfers?id=${t.id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Falha ao deletar transferência");
+  } catch (e) {
+    console.error("Erro ao deletar transferência:", e);
+    // rollback se falhar
+    setData(snapshot);
+  }
+};
+
+
+
+  // Dados do mapa (memo)
+  const map = useMemo(() => buildTransferMatrix(data), [data])
+
+  // Filtro por texto no mapa
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return { labels: map.labels, rows: map.matrix, idxs: map.labels.map((_, i) => i) }
+    const idxs = map.labels
+      .map((l, i) => ({ l, i }))
+      .filter(({ l }) => l.toLowerCase().includes(q))
+      .map(({ i }) => i)
+    const rows = idxs.map(i => idxs.map(j => map.matrix[i][j]))
+    const labels = idxs.map(i => map.labels[i])
+    return { labels, rows, idxs }
+  }, [map, query])
+
+  // Lista consolidada origem->destino
+  const edges = useMemo(() => {
+    const list: { from: string; to: string; amount: number }[] = []
+    map.labels.forEach((from, i) => {
+      map.labels.forEach((to, j) => {
+        const v = map.matrix[i][j]
+        if (v > 0) list.push({ from, to, amount: v })
+      })
+    })
+    return list.sort((a, b) => b.amount - a.amount)
+  }, [map])
+
+  const exportCSV = () => {
+    const header = "origem,destino,valor\n"
+    const body = edges.map(e => `"${e.from}","${e.to}",${e.amount}`).join("\n")
+    const csv = header + body
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "transferencias.csv"
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const loading = data.length === 0
 
   return (
-    <>
-      <Card className="overflow-hidden border border-slate-200 shadow-lg">
-        <div className="flex items-center justify-between px-4 py-3 border-b bg-white">
-          <h3 className="text-sm font-semibold text-slate-800">CAPEX (R$ Mil)</h3>
-          <button
-            onClick={() => setMapOpen(true)}
-            className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded px-3 py-1.5"
-            disabled={loading}
-          >
-            Mapa de Transferências
-          </button>
-        </div>
-        {loading ? (
+    <Card className="overflow-hidden border border-slate-200 shadow-lg">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between px-4 py-3 border-b bg-white">
+        <h3 className="text-sm font-semibold text-slate-800">CAPEX (R$ Mil)</h3>
+        <button
+          onClick={() => setMapOpen(true)}
+          className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded px-3 py-1.5"
+          disabled={loading}
+        >
+          Mapa de Transferências
+        </button>
+      </div>
+
+      {loading ? (
         <div className="p-6 text-sm text-slate-600">Carregando...</div>
-            ) : (
-            <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                    <thead>
-                        <tr className="bg-[#00823B] text-white">
-                            <th className="sticky left-0 z-20 bg-[#00823B] border-r border-b border-[#004d23] px-4 py-3 text-left font-semibold min-w-64">
-                            CAPEX (R$ Mil)
-                            </th>
-                            {MONTHS.map((m, idx) => (
-                            <th key={idx} className="border-b border-r border-[#004d23] px-3 py-3 text-center font-semibold min-w-32 text-sm">
-                                {m}/25
-                            </th>
-                            ))}
-                            <th className="border-b border-r border-slate-500 px-3 py-3 text-center font-semibold min-w-40 bg-amber-300 text-slate-900 font-bold">
-                            MELHOR VISÃO
-                            </th>
-                            <th className="border-b border-r border-slate-500 px-3 py-3 text-center font-semibold min-w-40 bg-sky-300 text-slate-900 font-bold">
-                            META
-                            </th>
-                            <th className="border-b border-r border-slate-500 px-3 py-3 text-center font-semibold min-w-56 bg-violet-300 text-slate-900 font-bold">
-                            TRANSFERÊNCIA (líquida)
-                            </th>
-                            <th className="border-b border-slate-500 px-3 py-3 text-center font-semibold min-w-48 bg-slate-300 text-slate-900 font-bold">
-                            SALDO A DISTRIBUIR
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-              {displayData.map((row, rowIndex) => {
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-[#00823B] text-white">
+                <th className="sticky left-0 z-20 bg-[#00823B] border border-[#004d23] px-4 py-3 text-left font-semibold min-w-64">
+                  CAPEX (R$ Mil)
+                </th>
+                {MONTHS.map((m, idx) => (
+                  <th key={idx} className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-32 text-sm">
+                    {m}/25
+                  </th>
+                ))}
+                <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-40 bg-[#FFB81C] text-slate-900 font-bold">
+                  MELHOR VISÃO
+                </th>
+                <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-40 bg-slate-100 text-slate-900 font-bold">
+                  META
+                </th>
+                <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-56 bg-indigo-50 text-slate-900 font-bold">
+                  TRANSFERÊNCIA (líquida)
+                </th>
+                <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-48 bg-sky-50 text-slate-900 font-bold">
+                  SALDO A DISTRIBUIR
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {computeDisplay(data).map((row, rowIndex) => {
                 const total = calculateTotal(row.cells)
                 const isSubLevel = row.sublevel === 1
                 const isPlano = row.sublevel === undefined
                 const net = row.transferNet ?? 0
                 const metaVal = row.meta ?? 0
-                const saldo = metaVal - total + net 
+                const saldo = metaVal - total + net
+
                 const incomingList = incomingIndex[row.label] ?? []
-                const originalRowData = data.find(d => d.label === row.label);
-                const outgoingList = originalRowData?.transfers ?? [];
+                const outgoingList = data[rowIndex]?.transfers ?? []
                 const incomingCount = incomingList.length
                 const outgoingCount = outgoingList.length
-                const isDetailsOpen = openDetails === rowIndex;
 
                 return (
                   <tr
                     key={rowIndex}
-                    className={`${row.color || (isSubLevel ? "bg-white" : "bg-slate-50")} border-b border-slate-200 hover:bg-slate-50 transition-colors ${isDetailsOpen ? 'relative z-10' : ''}`}
+                    className={`${row.color || (isSubLevel ? "bg-white" : "bg-slate-50")} border-b border-slate-200 hover:bg-slate-50 transition-colors`}
                   >
                     <td
-                      className={`sticky left-0 z-10 border-r border-slate-200 px-4 py-3 font-medium ${
+                      className={`sticky left-0 z-10 border border-slate-200 px-4 py-3 font-medium ${
                         row.color || (isSubLevel ? "bg-white" : "bg-slate-50")
                       } ${isSubLevel ? "pl-8 text-slate-700" : "text-slate-900"}`}
                     >
@@ -339,13 +553,13 @@ export function CapexTable() {
                     </td>
 
                     {row.cells.map((cell, cellIndex) => {
-                      const isRealizado = cellIndex < 10
+                      const isRealizado = cellIndex <= 9
                       const isEditable = isSubLevel && (cellIndex === 10 || cellIndex === 11)
                       return (
                         <td
                           key={cellIndex}
-                          className={`border-r border-slate-200 px-3 py-3 text-center min-w-32 ${
-                            isRealizado ? "bg-blue-50/50" : "bg-white"
+                          className={`border border-slate-200 px-3 py-3 text-center min-w-32 ${
+                            isRealizado ? "bg-[#e6f0ff] text-slate-900" : "bg-white"
                           }`}
                         >
                           {isEditable ? (
@@ -353,7 +567,7 @@ export function CapexTable() {
                               type="number"
                               value={cell.value === 0 ? "" : cell.value}
                               onChange={(e) => handleCellChange(row, rowIndex, cellIndex, e.target.value)}
-                              className="w-full bg-emerald-50/50 border border-emerald-500 rounded px-2 py-1 text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                              className="w-full bg-[#e6f7f0] border border-[#00823B] rounded px-2 py-1 text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#00823B] focus:bg-white"
                               placeholder="0"
                             />
                           ) : (
@@ -365,14 +579,15 @@ export function CapexTable() {
                       )
                     })}
 
-                    <td className="border-r border-slate-200 px-3 py-3 text-center font-bold text-slate-900 bg-amber-50 min-w-40">
+                    <td className="border border-slate-200 px-3 py-3 text-center font-bold text-slate-900 bg-[#fff3e0] min-w-40">
                       <span className="text-sm">{formatNumber(total)}</span>
                     </td>
-                    <td className="border-r border-slate-200 px-3 py-3 text-center font-bold text-slate-900 bg-sky-50 min-w-40">
+                    <td className="border border-slate-200 px-3 py-3 text-center font-bold text-slate-900 bg-slate-100 min-w-40">
                       <span className="text-sm">{formatNumber(metaVal)}</span>
                     </td>
 
-                    <td className="border-r border-slate-200 px-3 py-3 text-center bg-violet-50 min-w-56">
+                    {/* TRANSFERÊNCIA (líquida) */}
+                    <td className="border border-slate-200 px-3 py-3 text-center bg-indigo-50 min-w-56">
                       <div className="flex flex-col items-center justify-center gap-1">
                         <span
                           className={`text-sm font-bold ${
@@ -387,94 +602,95 @@ export function CapexTable() {
                           </span>
                         )}
                         {isSubLevel && (
-                          <div className="relative mt-1">
-                            <button onClick={() => setOpenDetails(isDetailsOpen ? null : rowIndex)} className="cursor-pointer text-xs text-indigo-700 underline decoration-dotted select-none">
+                          <details className="relative mt-1">
+                            <summary className="cursor-pointer text-xs text-indigo-700 underline decoration-dotted select-none">
                               detalhes
-                            </button>
-                            {isDetailsOpen && (
-                              <div className="absolute right-0 mt-2 w-[520px] bg-white border border-slate-200 rounded shadow-lg p-3 z-20 text-left">
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <h4 className="text-xs font-semibold text-emerald-700 mb-2">Entradas (por origem)</h4>
-                                    <div className="max-h-56 overflow-auto space-y-2">
-                                      {incomingList.length > 0 ? (
-                                        incomingList.map((inc, idx) => (
-                                          <div key={idx} className="flex items-center justify-between border border-emerald-100 rounded px-2 py-1">
-                                            <span className="text-xs text-slate-700">{inc.from}</span>
-                                            <span className="text-xs font-semibold text-emerald-700">+{formatNumber(inc.amount)}</span>
-                                          </div>
-                                        ))
-                                      ) : (
-                                        <p className="text-xs text-slate-500">Sem entradas.</p>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <h4 className="text-xs font-semibold text-red-700 mb-2">Saídas</h4>
-                                    <div className="max-h-56 overflow-auto space-y-2">
-                                      {outgoingList.map((t, tIdx) => (
-                                        <div key={tIdx} className="grid grid-cols-12 gap-2 items-end">
-                                          <div className="col-span-5">
-                                            <label className="text-[11px] text-slate-500">Valor (saída)</label>
-                                            <input
-                                              type="number"
-                                              value={t.amount === 0 ? "" : t.amount}
-                                              onChange={(e) => updateTransferAmount(rowIndex, tIdx, e.target.value)}
-                                              className="w-full border border-slate-300 rounded px-2 py-1 text-sm"
-                                              placeholder="0"
-                                            />
-                                          </div>
-                                          <div className="col-span-6">
-                                            <label className="text-[11px] text-slate-500">Destino (subplano)</label>
-                                            <select
-                                              value={t.to ?? ""}
-                                              onChange={(e) => updateTransferTarget(rowIndex, tIdx, e.target.value)}
-                                              className="w-full border border-slate-300 rounded px-2 py-1 text-sm bg-white"
-                                            >
-                                              <option value="" disabled>Selecione um subplano</option>
-                                              {sublevelOptions.map((opt) => (
-                                                <option key={opt} value={opt}>{opt}</option>
-                                              ))}
-                                            </select>
-                                          </div>
-                                          <div className="col-span-1">
-                                            <button
-                                              onClick={() => removeTransfer(rowIndex, tIdx)}
-                                              className="text-xs text-red-600 hover:underline"
-                                            >
-                                              x
-                                            </button>
-                                          </div>
+                            </summary>
+                            <div className="absolute right-0 mt-2 w-[520px] bg-white border border-slate-200 rounded shadow p-3 z-30 text-left">
+                              <div className="grid grid-cols-2 gap-4">
+                                {/* ENTRADAS (somente leitura) */}
+                                <div>
+                                  <h4 className="text-xs font-semibold text-emerald-700 mb-2">Entradas (por origem)</h4>
+                                  <div className="max-h-56 overflow-auto space-y-2">
+                                    {incomingList.length > 0 ? (
+                                      incomingList.map((inc, idx) => (
+                                        <div key={idx} className="flex items-center justify-between border border-emerald-100 rounded px-2 py-1">
+                                          <span className="text-xs text-slate-700">{inc.from}</span>
+                                          <span className="text-xs font-semibold text-emerald-700">+{formatNumber(inc.amount)}</span>
                                         </div>
-                                      ))}
-                                      {outgoingList.length === 0 && (
-                                        <p className="text-xs text-slate-500">Sem saídas.</p>
-                                      )}
-                                    </div>
-                                    <div className="mt-2 flex items-center justify-between">
-                                      <span className="text-xs text-slate-700">
-                                        Total saídas: <span className="font-semibold text-red-700">
-                                          {formatNumber(outgoingList.reduce((s, t) => s + (t.amount || 0), 0))}
-                                        </span>
-                                      </span>
-                                      <button
-                                        onClick={() => addTransfer(rowIndex)}
-                                        className="bg-indigo-600 text-white text-xs rounded px-2 py-1 hover:bg-indigo-700"
-                                      >
-                                        Adicionar saída
-                                      </button>
-                                    </div>
+                                      ))
+                                    ) : (
+                                      <p className="text-xs text-slate-500">Sem entradas.</p>
+                                    )}
                                   </div>
                                 </div>
-                                <div className="mt-3 text-xs text-slate-700 border-t pt-2">
-                                  Líquido (entradas − saídas):{" "}
-                                  <span className={`font-semibold ${net > 0 ? "text-emerald-700" : net < 0 ? "text-red-700" : "text-slate-900"}`}>
-                                    {formatSigned(net)}
-                                  </span>
+
+                                {/* SAÍDAS (editável) */}
+                                <div>
+                                  <h4 className="text-xs font-semibold text-red-700 mb-2">Saídas</h4>
+                                  <div className="max-h-56 overflow-auto space-y-2">
+                                    {(data[rowIndex].transfers ?? []).map((t, tIdx) => (
+                                      <div key={tIdx} className="grid grid-cols-12 gap-2 items-end">
+                                        <div className="col-span-5">
+                                          <label className="text-[11px] text-slate-500">Valor (saída)</label>
+                                          <input
+                                            type="number"
+                                            value={t.amount === 0 ? "" : t.amount}
+                                            onChange={(e) => updateTransferAmount(rowIndex, tIdx, e.target.value)}
+                                            className="w-full border border-slate-300 rounded px-2 py-1 text-sm"
+                                            placeholder="0"
+                                          />
+                                        </div>
+                                        <div className="col-span-6">
+                                          <label className="text-[11px] text-slate-500">Destino (subplano)</label>
+                                          <select
+                                            value={t.to ?? ""}
+                                            onChange={(e) => updateTransferTarget(rowIndex, tIdx, e.target.value)}
+                                            className="w-full border border-slate-300 rounded px-2 py-1 text-sm bg-white"
+                                          >
+                                            <option value="" disabled>Selecione um subplano</option>
+                                            {sublevelOptions.map((opt) => (
+                                              <option key={opt} value={opt}>{opt}</option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                        <div className="col-span-1">
+                                          <button
+                                            onClick={() => removeTransfer(rowIndex, tIdx)}
+                                            className="text-xs text-red-600 hover:underline"
+                                          >
+                                            x
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                    {(!data[rowIndex].transfers || data[rowIndex].transfers!.length === 0) && (
+                                      <p className="text-xs text-slate-500">Sem saídas.</p>
+                                    )}
+                                  </div>
+                                  <div className="mt-2 flex items-center justify-between">
+                                    <span className="text-xs text-slate-700">
+                                      Total saídas: <span className="font-semibold text-red-700">
+                                        {formatNumber((data[rowIndex].transfers ?? []).reduce((s, t) => s + (t.amount || 0), 0))}
+                                      </span>
+                                    </span>
+                                    <button
+                                      onClick={() => addTransfer(rowIndex)}
+                                      className="bg-indigo-600 text-white text-xs rounded px-2 py-1 hover:bg-indigo-700"
+                                    >
+                                      Adicionar saída
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
-                            )}
-                          </div>
+                              <div className="mt-3 text-xs text-slate-700 border-t pt-2">
+                                Líquido (entradas − saídas):{" "}
+                                <span className={`font-semibold ${net > 0 ? "text-emerald-700" : net < 0 ? "text-red-700" : "text-slate-900"}`}>
+                                  {formatSigned(net)}
+                                </span>
+                              </div>
+                            </div>
+                          </details>
                         )}
                         {isPlano && (
                           <p className="mt-1 text-[11px] text-slate-500">
@@ -484,8 +700,9 @@ export function CapexTable() {
                       </div>
                     </td>
 
-                    <td className={`px-3 py-3 text-center min-w-48 ${
-                      saldo > 0 ? "bg-emerald-50" : saldo < 0 ? "bg-rose-50" : "bg-white"
+                    {/* SALDO A DISTRIBUIR = META − MELHOR VISÃO + TRANSFERÊNCIA (líquida) */}
+                    <td className={`border border-slate-200 px-3 py-3 text-center min-w-48 ${
+                      saldo > 0 ? "bg-emerald-50" : saldo < 0 ? "bg-rose-50" : "bg-sky-50"
                     }`}>
                       <span
                         className={`text-sm font-bold ${
@@ -499,53 +716,160 @@ export function CapexTable() {
                 )
               })}
             </tbody>
-                </table>
-            </div>
-        )}
-      </Card>
-
-      {mapOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-            {/* O conteúdo completo do Modal do Mapa de Transferências deve ser mantido aqui */}
+          </table>
         </div>
       )}
-      
-      <div className="mt-6 p-4 border border-slate-200 rounded-lg bg-white shadow-md">
-        <h4 className="text-md font-semibold text-slate-800 mb-4">Legenda das Colunas</h4>
-        <div className="space-y-3">
-          <div className="flex items-start gap-3">
-            <span className="w-4 h-4 mt-1 flex-shrink-0 rounded border border-slate-300 bg-amber-50"></span>
-            <div>
-              <dt className="font-semibold text-sm text-slate-800">MELHOR VISÃO</dt>
-              <dd className="text-sm text-slate-600">Soma total dos valores executados e previstos para cada item ao longo dos 12 meses.</dd>
+
+      <div className="bg-slate-50 border-t border-slate-200 px-6 py-4 space-y-2">
+        <p className="text-sm text-slate-600">
+          <span className="inline-block w-3 h-3 bg-[#e6f0ff] border border-[#0066CC] rounded mr-2"></span>
+          Valores em <strong>azul</strong> são dados de janeiro a outubro (imutáveis)
+        </p>
+        <p className="text-sm text-slate-600">
+          <span className="inline-block w-3 h-3 bg-[#e6f7f0] border border-[#00823B] rounded mr-2"></span>
+          Valores em <strong>verde</strong> são novembro e dezembro (editáveis nos subníveis)
+        </p>
+        <p className="text-sm text-slate-600">
+          <span className="inline-block w-3 h-3 bg-indigo-50 border border-indigo-200 rounded mr-2"></span>
+          <strong>Transferência (líquida)</strong> = entradas − saídas. <strong>Saldo a Distribuir</strong> = META − MELHOR VISÃO + Transferência.
+        </p>
+      </div>
+
+      {/* Modal do Mapa */}
+      {mapOpen && !loading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMapOpen(false)} />
+          <div className="relative bg-white w-[90vw] max-w-6xl max-h-[85vh] rounded-lg border shadow-lg overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <h4 className="text-sm font-semibold text-slate-800">Mapa de Transferências</h4>
+              <div className="flex items-center gap-2">
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Filtrar por subplano..."
+                  className="text-sm border rounded px-2 py-1"
+                />
+                <label className="text-xs text-slate-700 flex items-center gap-1">
+                  <input type="checkbox" checked={hideZeros} onChange={(e) => setHideZeros(e.target.checked)} />
+                  Ocultar zeros
+                </label>
+                <button
+                  onClick={exportCSV}
+                  className="text-xs bg-slate-100 hover:bg-slate-200 rounded px-2 py-1 border"
+                >
+                  Exportar CSV
+                </button>
+                <button
+                  onClick={() => setMapOpen(false)}
+                  className="text-xs bg-slate-800 text-white hover:bg-slate-900 rounded px-2 py-1"
+                >
+                  Fechar
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="w-4 h-4 mt-1 flex-shrink-0 rounded border border-slate-300 bg-sky-50"></span>
-            <div>
-              <dt className="font-semibold text-sm text-slate-800">META</dt>
-              <dd className="text-sm text-slate-600">Valor orçamentário alvo definido para o plano ou subplano.</dd>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="w-4 h-4 mt-1 flex-shrink-0 rounded border border-slate-300 bg-violet-50"></span>
-            <div>
-              <dt className="font-semibold text-sm text-slate-800">TRANSFERÊNCIA (líquida)</dt>
-              <dd className="text-sm text-slate-600">Saldo de valores movimentados entre subplanos (entradas − saídas).</dd>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <div className="flex flex-shrink-0 mt-1 gap-1">
-                <span className="w-4 h-4 rounded border border-slate-300 bg-emerald-50"></span>
-                <span className="w-4 h-4 rounded border border-slate-300 bg-rose-50"></span>
-            </div>
-            <div>
-              <dt className="font-semibold text-sm text-slate-800">SALDO A DISTRIBUIR</dt>
-              <dd className="text-sm text-slate-600">Valor restante do orçamento. Saldo positivo (verde) indica sobra; negativo (vermelho) indica estouro. Calculado como: <code className="text-xs bg-slate-100 p-1 rounded">META - MELHOR VISÃO + TRANSFERÊNCIA</code>.</dd>
+
+            <div className="px-4 pt-3">
+              <div className="flex items-center gap-4 mb-3">
+                <button
+                  onClick={() => setMapTab("matrix")}
+                  className={`text-xs px-3 py-1.5 rounded border ${mapTab === "matrix" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white hover:bg-slate-50"}`}
+                >
+                  Matriz
+                </button>
+                <button
+                  onClick={() => setMapTab("list")}
+                  className={`text-xs px-3 py-1.5 rounded border ${mapTab === "list" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white hover:bg-slate-50"}`}
+                >
+                  Lista
+                </button>
+              </div>
+
+              {mapTab === "matrix" ? (
+                <div className="overflow-auto max-h-[65vh] pb-4">
+                  <table className="border-collapse">
+                    <thead>
+                      <tr>
+                        <th className="sticky left-0 z-10 bg-white border px-2 py-1 text-xs text-slate-700 text-left">Origem ↓ / Destino →</th>
+                        {filtered.labels.map((dest, j) => (
+                          <th key={j} className="border px-2 py-1 text-xs text-slate-700">{dest}</th>
+                        ))}
+                        <th className="border px-2 py-1 text-xs font-semibold bg-slate-50">Saída total</th>
+                        <th className="border px-2 py-1 text-xs font-semibold bg-slate-50">Saldo líquido</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.rows.map((row, iRow) => {
+                        const idx = filtered.idxs[iRow]
+                        const out = map.outgoing[idx]
+                        const net = map.net[idx]
+                        return (
+                          <tr key={iRow} className="hover:bg-slate-50">
+                            <td className="sticky left-0 z-10 bg-white border px-2 py-1 text-xs text-slate-700">{filtered.labels[iRow]}</td>
+                            {row.map((v, j) => (
+                              <td key={j} className={`border px-2 py-1 text-xs text-right align-middle ${hideZeros && v === 0 ? "text-slate-300" : ""} ${heatClass(v, map.max)}`}>
+                                {v === 0 && hideZeros ? "" : formatNumber(v)}
+                              </td>
+                            ))}
+                            <td className="border px-2 py-1 text-xs text-right font-semibold bg-slate-50 text-red-700">{formatNumber(out)}</td>
+                            <td className={`border px-2 py-1 text-xs text-right font-semibold bg-slate-50 ${net >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                              {formatSigned(net)}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                      {/* Linha de totais de entrada */}
+                      <tr>
+                        <td className="sticky left-0 z-10 bg-slate-50 border px-2 py-1 text-xs font-semibold">Entrada total</td>
+                        {filtered.labels.map((_, j) => {
+                          const idx = filtered.idxs[j]
+                          const inc = map.incoming[idx]
+                          return (
+                            <td key={j} className="border px-2 py-1 text-xs text-right font-semibold bg-slate-50 text-emerald-700">
+                              {formatNumber(inc)}
+                            </td>
+                          )
+                        })}
+                        <td className="border px-2 py-1 text-xs bg-slate-50" />
+                        <td className="border px-2 py-1 text-xs bg-slate-50" />
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="max-h-[65vh] overflow-auto pb-4">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50">
+                        <th className="border px-2 py-1 text-xs text-left">Origem</th>
+                        <th className="border px-2 py-1 text-xs text-left">Destino</th>
+                        <th className="border px-2 py-1 text-xs text-right">Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {edges
+                        .filter(e => {
+                          const q = query.trim().toLowerCase()
+                          if (!q) return true
+                          return e.from.toLowerCase().includes(q) || e.to.toLowerCase().includes(q)
+                        })
+                        .map((e, i) => (
+                          <tr key={i} className="hover:bg-slate-50">
+                            <td className="border px-2 py-1 text-xs">{e.from}</td>
+                            <td className="border px-2 py-1 text-xs">{e.to}</td>
+                            <td className="border px-2 py-1 text-xs text-right">{formatNumber(e.amount)}</td>
+                          </tr>
+                        ))}
+                      {edges.length === 0 && (
+                        <tr><td colSpan={3} className="text-center text-xs text-slate-500 py-4">Sem transferências.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>
-      </div>
-    </>
+      )}
+    </Card>
   )
 }
