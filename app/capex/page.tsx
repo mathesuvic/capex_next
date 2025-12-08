@@ -1,6 +1,8 @@
+// app/capex/page.tsx
 import { CapexTable } from "@/components/capex-table"
+// import { LogoutButton } from "@/components/auth/LogoutButton"
 
-export default function Home() {
+export default function CapexPage() {
   return (
     <main className="min-h-screen bg-white p-6">
       <div className="max-w-full">
