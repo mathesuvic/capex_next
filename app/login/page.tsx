@@ -27,7 +27,7 @@ export default function LoginPage() {
       if (!res.ok) throw new Error("Credenciais inválidas")
 
       // Cookie 'auth' é setado no servidor. Agora podemos seguir para o app.
-      router.push("/")
+      router.push("/home")
     } catch (err: any) {
       setError(err.message || "Falha no login")
     } finally {
