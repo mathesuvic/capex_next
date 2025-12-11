@@ -42,7 +42,7 @@ export default function LoginPage() {
           <span className="text-2xl font-bold text-white">&lt;/&gt;</span>
         </div>
         <h1 className="text-4xl font-bold text-slate-800">Neoenergia</h1>
-        <p className="mt-2 text-md text-slate-500">Portal CAPEX - Aprovação de Projetos</p>
+        <p className="mt-2 text-md text-slate-500">Portal CAPEX - Gerenciamento de Recursos - Coelba</p>
       </div>
 
       <div className="mt-8 w-full max-w-md rounded-lg bg-white p-8 shadow-lg">

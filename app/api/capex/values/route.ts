@@ -13,6 +13,8 @@ export async function PUT(request: Request) {
 
     // 2. Mapear o mês para a coluna do banco
     const monthColumnMap: { [key: number]: string } = {
+      9: 'set_ano',
+      10: 'out_ano',
       11: 'nov_ano',
       12: 'dez_ano',
     };

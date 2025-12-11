@@ -29,6 +29,13 @@ interface RowData {
 
 const MONTHS = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"]
 
+// Parse inicial dos meses editáveis vindos da env (1–12 -> converte para índice 0–11)
+const parseEnvEditableMonths = () =>
+  (process.env.NEXT_PUBLIC_CAPEX_EDITABLE_MONTHS ?? "9,10,11,12")
+    .split(",")
+    .map((s) => parseInt(s.trim(), 10) - 1)
+    .filter((m) => Number.isFinite(m) && m >= 0 && m < 12)
+
 // Fallback local (usado só se o fetch da API falhar)
 const fallbackData: RowData[] = [
   {
@@ -44,7 +51,7 @@ const fallbackData: RowData[] = [
       { value: 63700, type: "realizado" },
       { value: 81745, type: "realizado" },
       { value: 97633, type: "realizado" },
-      { value: 127582, type: "realizado" },
+      { value: 127582, type: "previsto" },
       { value: 105648, type: "previsto" },
       { value: 88102, type: "previsto" },
     ],
@@ -59,7 +66,7 @@ const fallbackData: RowData[] = [
       { value: 19116, type: "realizado" }, { value: 27885, type: "realizado" },
       { value: 30912, type: "realizado" }, { value: 28967, type: "realizado" },
       { value: 19033, type: "realizado" }, { value: 25259, type: "realizado" },
-      { value: 19444, type: "realizado" }, { value: 25023, type: "realizado" },
+      { value: 19444, type: "realizado" }, { value: 25023, type: "previsto" },
       { value: 37235, type: "previsto" },  { value: 41286, type: "previsto" },
     ],
   },
@@ -73,7 +80,7 @@ const fallbackData: RowData[] = [
       { value: 53583, type: "realizado" }, { value: 44947, type: "realizado" },
       { value: 52267, type: "realizado" }, { value: 57185, type: "realizado" },
       { value: 37689, type: "realizado" }, { value: 59108, type: "realizado" },
-      { value: 58571, type: "realizado" }, { value: 89033, type: "realizado" },
+      { value: 58571, type: "realizado" }, { value: 89033, type: "previsto" },
       { value: 53883, type: "previsto" },  { value: 28637, type: "previsto" },
     ],
   },
@@ -87,7 +94,7 @@ const fallbackData: RowData[] = [
       { value: 6335, type: "realizado" },  { value: 6295, type: "realizado" },
       { value: 7212, type: "realizado" },  { value: 11112, type: "realizado" },
       { value: 6978, type: "realizado" },  { value: 10047, type: "realizado" },
-      { value: 19618, type: "realizado" }, { value: 12920, type: "realizado" },
+      { value: 19618, type: "realizado" }, { value: 12920, type: "previsto" },
       { value: 14529, type: "previsto" },  { value: 18176, type: "previsto" },
     ],
   },
@@ -99,7 +106,7 @@ const fallbackData: RowData[] = [
       { value: 8869, type: "realizado" }, { value: 413, type: "realizado" },
       { value: 1021, type: "realizado" }, { value: 911, type: "realizado" },
       { value: 1394, type: "realizado" }, { value: 787, type: "realizado" },
-      { value: 1285, type: "realizado" }, { value: 359, type: "realizado" },
+      { value: 1285, type: "realizado" }, { value: 359, type: "previsto" },
       { value: 9935, type: "previsto" },  { value: 8897, type: "previsto" },
     ],
   },
@@ -120,7 +127,7 @@ const fallbackData: RowData[] = [
       { value: 27, type: "realizado" }, { value: 28, type: "realizado" },
       { value: 15, type: "realizado" }, { value: 23, type: "realizado" },
       { value: 25, type: "realizado" }, { value: 30, type: "realizado" },
-      { value: 48, type: "realizado" }, { value: 38, type: "realizado" },
+      { value: 48, type: "realizado" }, { value: 38, type: "previsto" },
       { value: 29, type: "previsto" },  { value: 62, type: "previsto" },
     ],
   },
@@ -134,7 +141,7 @@ const fallbackData: RowData[] = [
       { value: 889, type: "realizado" }, { value: 41, type: "realizado" },
       { value: 549, type: "realizado" }, { value: 704, type: "realizado" },
       { value: 1177, type: "realizado" }, { value: 572, type: "realizado" },
-      { value: 890, type: "realizado" }, { value: 11, type: "realizado" },
+      { value: 890, type: "realizado" }, { value: 11, type: "previsto" },
       { value: 9906, type: "previsto" },  { value: 8835, type: "previsto" },
     ],
   },
@@ -172,10 +179,18 @@ function buildIncomingIndex(rows: RowData[]) {
   return result
 }
 
-function computeDisplay(rows: RowData[]): RowData[] {
+/**
+ * computeDisplay agora recebe `editableMonths` (Set<number>) para forçar meses
+ * marcados como editáveis a serem tratados como "previsto" nas linhas de subnível.
+ */
+function computeDisplay(rows: RowData[], editableMonths: Set<number>) {
   const res = rows.map(r => ({ ...r, cells: r.cells.map(c => ({ ...c })) }))
+
+  // Índice dos subplanos
   const subIndex = new Map<string, number>()
   res.forEach((r, i) => { if (r.sublevel === 1) subIndex.set(r.label, i) })
+
+  // Outgoing e incoming para calcular líquido
   const outgoing = res.map(sumOutgoing)
   const incoming = Array(res.length).fill(0)
   res.forEach((r) => {
@@ -187,23 +202,34 @@ function computeDisplay(rows: RowData[]): RowData[] {
   })
   const net = res.map((_, i) => incoming[i] - outgoing[i])
 
+  // Agrega planos e anota transferNet
   let i = 0
   while (i < res.length) {
     const row = res[i]
     if (row.sublevel === undefined) {
       const agg = Array(12).fill(0)
+      const monthIsPrevisto = Array(12).fill(false) as boolean[]
       let metaSum = 0
       let netSum = 0
       let j = i + 1
+
       while (j < res.length && res[j].sublevel === 1) {
+        // soma por mês e marca se alguma célula do mês é "previsto"
         res[j].cells.forEach((cell, idx) => {
           agg[idx] += typeof cell.value === "number" ? cell.value : 0
+          if (cell.type === "previsto") monthIsPrevisto[idx] = true
         })
         metaSum += res[j].meta ?? 0
         netSum += net[j]
         res[j] = { ...res[j], transferNet: net[j] }
         j++
       }
+
+      // Se o mês foi marcado como editável globalmente, considera previsto na visão agregada
+      for (let mi = 0; mi < 12; mi++) {
+        if (editableMonths.has(mi)) monthIsPrevisto[mi] = true
+      }
+
       res[i] = {
         ...row,
         computed: true,
@@ -211,16 +237,28 @@ function computeDisplay(rows: RowData[]): RowData[] {
         transferNet: netSum,
         cells: agg.map((v, idx) => ({
           value: v,
-          type: idx < 10 ? "realizado" : "previsto",
+          type: monthIsPrevisto[idx] ? "previsto" as const : "realizado" as const,
         })),
       }
+
       i = j
     } else {
+      // Para linhas de subnível, se o mês estiver marcado como editável forçamos o tipo para "previsto"
+      // (mantendo o valor atual)
+      res[i] = {
+        ...res[i],
+        cells: res[i].cells.map((c, idx) => ({
+          value: c.value,
+          type: editableMonths.has(idx) ? "previsto" : c.type,
+        })),
+      }
       i++
     }
   }
+
   return res
 }
+
 
 // ===== Mapa de Transferências =====
 
@@ -267,6 +305,9 @@ export function CapexTable() {
   const [query, setQuery] = useState("")
   const [hideZeros, setHideZeros] = useState(true)
 
+  // Estado para meses editáveis (índices 0–11). Inicializa a partir da env.
+  const [editableMonths, setEditableMonths] = useState<Set<number>>(() => new Set(parseEnvEditableMonths()))
+
   // Carrega do backend
   useEffect(() => {
     let cancelled = false
@@ -290,154 +331,138 @@ export function CapexTable() {
   )
   const sublevelOptions = subplans.map(s => s.label)
   const incomingIndex = buildIncomingIndex(data)
-  const displayData = computeDisplay(data)
+  const displayData = computeDisplay(data, editableMonths)
+
+  // Toggle visual para meses editáveis (cria novo Set para forçar re-render)
+  const toggleEditableMonth = (idx: number) => {
+    setEditableMonths(prev => {
+      const next = new Set(prev)
+      if (next.has(idx)) next.delete(idx)
+      else next.add(idx)
+      return next
+    })
+  }
 
   // Atualiza célula e persiste nov/dez para subplanos
-  // Dentro de /components/capex-table.tsx
+  const handleCellChange = async (row: RowData, rowIndex: number, cellIndex: number, value: string) => {
+    const numValue = value === "" ? 0 : Number.parseFloat(value) || 0;
 
-const handleCellChange = async (row: RowData, rowIndex: number, cellIndex: number, value: string) => {
-  const numValue = value === "" ? 0 : Number.parseFloat(value) || 0;
-
-  // Atualiza estado otimista (continua igual)
-  setData(prev => {
-    const copy = structuredClone(prev) as RowData[];
-    copy[rowIndex].cells[cellIndex].value = numValue;
-    return copy;
-  });
-
-  // Persistir apenas para subplano e meses 11/12
-  if (row.sublevel === 1 && (cellIndex === 10 || cellIndex === 11)) {
-    try {
-      const month = cellIndex + 1;
-      
-      // MUDANÇA #1: A URL agora é estática
-      await fetch(`/api/capex/values`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        // MUDANÇA #2: Adicionamos 'label' ao corpo da requisição
-        body: JSON.stringify({ 
-          month: month, 
-          value: numValue,
-          label: row.label // Enviando o nome do CAPEX como identificador
-        }),
-      });
-    } catch (e) {
-      console.error(e);
-    }
-  }
-};
-
-
-  // CRUD transferências (saídas) na linha
-  // Dentro de /components/capex-table.tsx
-
-const addTransfer = async (rowIndex: number) => {
-  const row = data[rowIndex];
-  // A validação agora deve ser pelo NOME (label), não pelo ID numérico
-  if (!row?.label) return;
-
-  // Encontra um destino válido (continua igual)
-  const dest = subplans.find(s => s.label && s.label !== row.label) || subplans[0];
-  if (!dest?.label) return;
-
-  try {
-    // CHAMADA PARA A NOVA ROTA ESTÁTICA
-    const res = await fetch(`/api/capex/transfers`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      // Enviando os NOMES (labels) em vez de IDs numéricos
-      body: JSON.stringify({
-        fromLabel: row.label,
-        toLabel: dest.label,
-        amount: 0,
-      }),
-    });
-    
-    if (!res.ok) {
-      throw new Error('Falha ao criar transferência na API');
-    }
-
-    // A API agora retorna o registro completo da transferência criada
-    const newTransfer = await res.json();
-
-    // Atualiza o estado do front-end com os dados retornados pela API
+    // Atualiza estado otimista
     setData(prev => {
       const copy = structuredClone(prev) as RowData[];
-      const currentTransfers = copy[rowIndex].transfers ?? [];
-      
-      // Adiciona a nova transferência com o ID real do banco de dados
-      copy[rowIndex].transfers = [...currentTransfers, {
-        id: newTransfer.id,
-        amount: newTransfer.amount,
-        to: dest.label,
-      }];
+      if (!copy[rowIndex]) return prev;
+      copy[rowIndex].cells[cellIndex].value = numValue;
       return copy;
     });
 
-  } catch (e) {
-    console.error("Erro ao adicionar transferência:", e);
-  }
-};
+    // Persistir apenas para subplano e meses marcadas como editáveis
+    if (row.sublevel === 1 && editableMonths.has(cellIndex)) { 
+      try {
+        const month = cellIndex + 1;
+        await fetch(`/api/capex/values`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            month: month, 
+            value: numValue,
+            label: row.label // Enviando o nome do CAPEX como identificador
+          }),
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
 
+  // CRUD transferências (saídas) na linha
+  const addTransfer = async (rowIndex: number) => {
+    const row = data[rowIndex];
+    if (!row?.label) return;
 
-  const updateTransferAmount = (rowIndex: number, tIndex: number, value: string) => { // Removido 'async'
-  const amount = value === "" ? 0 : Number.parseFloat(value) || 0;
+    const dest = subplans.find(s => s.label && s.label !== row.label) || subplans[0];
+    if (!dest?.label) return;
 
-  setData(prev => {
-    const copy = structuredClone(prev) as RowData[];
-    const list = [...(copy[rowIndex].transfers ?? [])];
-    list[tIndex] = { ...list[tIndex], amount };
-    copy[rowIndex].transfers = list;
-    return copy;
-  });
-  // Bloco 'try/catch' com fetch REMOVIDO
-};
+    try {
+      const res = await fetch(`/api/capex/transfers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fromLabel: row.label,
+          toLabel: dest.label,
+          amount: 0,
+        }),
+      });
+      
+      if (!res.ok) {
+        throw new Error('Falha ao criar transferência na API');
+      }
 
+      const newTransfer = await res.json();
 
-  const updateTransferTarget = (rowIndex: number, tIndex: number, toLabel: string) => { // Removido 'async'
-  const dest = data.find(r => r.sublevel === 1 && r.label === toLabel);
-  setData(prev => {
-    const copy = structuredClone(prev) as RowData[];
-    const list = [...(copy[rowIndex].transfers ?? [])];
-    list[tIndex] = { ...list[tIndex], to: toLabel, toId: dest?.id };
-    copy[rowIndex].transfers = list;
-    return copy;
-  });
-  // Bloco 'try/catch' com fetch REMOVIDO
-};
+      setData(prev => {
+        const copy = structuredClone(prev) as RowData[];
+        const currentTransfers = copy[rowIndex].transfers ?? [];
+        copy[rowIndex].transfers = [...currentTransfers, {
+          id: newTransfer.id,
+          amount: newTransfer.amount,
+          to: dest.label,
+        }];
+        return copy;
+      });
 
+    } catch (e) {
+      console.error("Erro ao adicionar transferência:", e);
+    }
+  };
 
-  // components/capex-table.tsx (substitua sua função atual)
-const removeTransfer = async (rowIndex: number, tIndex: number) => {
-  const t = data[rowIndex]?.transfers?.[tIndex];
-  if (!t?.id) {
-    console.warn("Sem id da transferência para deletar");
-    return;
-  }
+  const updateTransferAmount = (rowIndex: number, tIndex: number, value: string) => {
+    const amount = value === "" ? 0 : Number.parseFloat(value) || 0;
 
-  // Snapshot para rollback
-  const snapshot = structuredClone(data) as RowData[];
+    setData(prev => {
+      const copy = structuredClone(prev) as RowData[];
+      const list = [...(copy[rowIndex].transfers ?? [])];
+      list[tIndex] = { ...list[tIndex], amount };
+      copy[rowIndex].transfers = list;
+      return copy;
+    });
+  };
 
-  // UI otimista
-  setData(prev => {
-    const copy = structuredClone(prev) as RowData[];
-    const list = [...(copy[rowIndex].transfers ?? [])];
-    list.splice(tIndex, 1);
-    copy[rowIndex].transfers = list;
-    return copy;
-  });
+  const updateTransferTarget = (rowIndex: number, tIndex: number, toLabel: string) => {
+    const dest = data.find(r => r.sublevel === 1 && r.label === toLabel);
+    setData(prev => {
+      const copy = structuredClone(prev) as RowData[];
+      const list = [...(copy[rowIndex].transfers ?? [])];
+      list[tIndex] = { ...list[tIndex], to: toLabel, toId: dest?.id };
+      copy[rowIndex].transfers = list;
+      return copy;
+    });
+  };
 
-  try {
-    const res = await fetch(`/api/capex/transfers?id=${t.id}`, { method: "DELETE" });
-    if (!res.ok) throw new Error("Falha ao deletar transferência");
-  } catch (e) {
-    console.error("Erro ao deletar transferência:", e);
-    // rollback se falhar
-    setData(snapshot);
-  }
-};
+  const removeTransfer = async (rowIndex: number, tIndex: number) => {
+    const t = data[rowIndex]?.transfers?.[tIndex];
+    if (!t?.id) {
+      console.warn("Sem id da transferência para deletar");
+      return;
+    }
 
+    const snapshot = structuredClone(data) as RowData[];
 
+    setData(prev => {
+      const copy = structuredClone(prev) as RowData[];
+      const list = [...(copy[rowIndex].transfers ?? [])];
+      list.splice(tIndex, 1);
+      copy[rowIndex].transfers = list;
+      return copy;
+    });
+
+    try {
+      const res = await fetch(`/api/capex/transfers?id=${t.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Falha ao deletar transferência");
+    } catch (e) {
+      console.error("Erro ao deletar transferência:", e);
+      setData(snapshot);
+    }
+  };
 
   // Dados do mapa (memo)
   const map = useMemo(() => buildTransferMatrix(data), [data])
@@ -487,13 +512,33 @@ const removeTransfer = async (rowIndex: number, tIndex: number) => {
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-3 border-b bg-white">
         <h3 className="text-sm font-semibold text-slate-800">CAPEX (R$ Mil)</h3>
-        <button
-          onClick={() => setMapOpen(true)}
-          className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded px-3 py-1.5"
-          disabled={loading}
-        >
-          Mapa de Transferências
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Controle de meses editáveis (chips) */}
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-slate-600 mr-2">Meses editáveis:</span>
+            {MONTHS.map((m, idx) => {
+              const active = editableMonths.has(idx)
+              return (
+                <button
+                  key={idx}
+                  onClick={() => toggleEditableMonth(idx)}
+                  className={`text-xs px-2 py-1 rounded border ${active ? "bg-[#e6f7f0] border-[#00823B] text-[#00663a]" : "bg-white hover:bg-slate-50"}`}
+                  title={`${m}/25`}
+                >
+                  {m}
+                </button>
+              )
+            })}
+          </div>
+
+          <button
+            onClick={() => setMapOpen(true)}
+            className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded px-3 py-1.5"
+            disabled={loading}
+          >
+            Mapa de Transferências
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -526,7 +571,7 @@ const removeTransfer = async (rowIndex: number, tIndex: number) => {
               </tr>
             </thead>
             <tbody>
-              {computeDisplay(data).map((row, rowIndex) => {
+              {displayData.map((row, rowIndex) => {
                 const total = calculateTotal(row.cells)
                 const isSubLevel = row.sublevel === 1
                 const isPlano = row.sublevel === undefined
@@ -545,22 +590,21 @@ const removeTransfer = async (rowIndex: number, tIndex: number) => {
                     className={`${row.color || (isSubLevel ? "bg-white" : "bg-slate-50")} border-b border-slate-200 hover:bg-slate-50 transition-colors`}
                   >
                     <td
-                      className={`sticky left-0 z-10 border border-slate-200 px-4 py-3 font-medium ${
-                        row.color || (isSubLevel ? "bg-white" : "bg-slate-50")
-                      } ${isSubLevel ? "pl-8 text-slate-700" : "text-slate-900"}`}
+                      className={`sticky left-0 z-10 border border-slate-200 px-4 py-3 font-medium ${row.color || (isSubLevel ? "bg-white" : "bg-slate-50")} ${isSubLevel ? "pl-8 text-slate-700" : "text-slate-900"}`}
                     >
                       {row.label}
                     </td>
 
                     {row.cells.map((cell, cellIndex) => {
-                      const isRealizado = cellIndex <= 9
-                      const isEditable = isSubLevel && (cellIndex === 10 || cellIndex === 11)
+                      const isRealizado = cell.type === "realizado"
+                      // EDITÁVEL se for subnível e o mês estiver marcado em editableMonths
+                      const isEditable = isSubLevel && editableMonths.has(cellIndex)
+
                       return (
                         <td
                           key={cellIndex}
-                          className={`border border-slate-200 px-3 py-3 text-center min-w-32 ${
-                            isRealizado ? "bg-[#e6f0ff] text-slate-900" : "bg-white"
-                          }`}
+                          className={`border border-slate-200 px-3 py-3 text-center min-w-32 ${!editableMonths.has(cellIndex) ? "bg-[#e6f0ff] text-slate-900" : "bg-white"}`}
+
                         >
                           {isEditable ? (
                             <input
@@ -589,11 +633,7 @@ const removeTransfer = async (rowIndex: number, tIndex: number) => {
                     {/* TRANSFERÊNCIA (líquida) */}
                     <td className="border border-slate-200 px-3 py-3 text-center bg-indigo-50 min-w-56">
                       <div className="flex flex-col items-center justify-center gap-1">
-                        <span
-                          className={`text-sm font-bold ${
-                            net > 0 ? "text-emerald-700" : net < 0 ? "text-red-700" : "text-slate-900"
-                          }`}
-                        >
+                        <span className={`text-sm font-bold ${net > 0 ? "text-emerald-700" : net < 0 ? "text-red-700" : "text-slate-900"}`}>
                           {formatSigned(net)}
                         </span>
                         {isSubLevel && (
@@ -701,14 +741,8 @@ const removeTransfer = async (rowIndex: number, tIndex: number) => {
                     </td>
 
                     {/* SALDO A DISTRIBUIR = META − MELHOR VISÃO + TRANSFERÊNCIA (líquida) */}
-                    <td className={`border border-slate-200 px-3 py-3 text-center min-w-48 ${
-                      saldo > 0 ? "bg-emerald-50" : saldo < 0 ? "bg-rose-50" : "bg-sky-50"
-                    }`}>
-                      <span
-                        className={`text-sm font-bold ${
-                          saldo > 0 ? "text-emerald-700" : saldo < 0 ? "text-red-700" : "text-slate-900"
-                        }`}
-                      >
+                    <td className={`border border-slate-200 px-3 py-3 text-center min-w-48 ${saldo > 0 ? "bg-emerald-50" : saldo < 0 ? "bg-rose-50" : "bg-sky-50"}`}>
+                      <span className={`text-sm font-bold ${saldo > 0 ? "text-emerald-700" : saldo < 0 ? "text-red-700" : "text-slate-900"}`}>
                         {formatSigned(saldo)}
                       </span>
                     </td>
@@ -723,11 +757,11 @@ const removeTransfer = async (rowIndex: number, tIndex: number) => {
       <div className="bg-slate-50 border-t border-slate-200 px-6 py-4 space-y-2">
         <p className="text-sm text-slate-600">
           <span className="inline-block w-3 h-3 bg-[#e6f0ff] border border-[#0066CC] rounded mr-2"></span>
-          Valores em <strong>azul</strong> são dados de janeiro a outubro (imutáveis)
+          Valores em <strong>azul</strong> são dados de janeiro a outubro (imutáveis por padrão)
         </p>
         <p className="text-sm text-slate-600">
           <span className="inline-block w-3 h-3 bg-[#e6f7f0] border border-[#00823B] rounded mr-2"></span>
-          Valores em <strong>verde</strong> são novembro e dezembro (editáveis nos subníveis)
+          Valores em <strong>verde</strong> são meses marcados como <strong>editáveis/previstos</strong> (você pode selecionar quais meses acima)
         </p>
         <p className="text-sm text-slate-600">
           <span className="inline-block w-3 h-3 bg-indigo-50 border border-indigo-200 rounded mr-2"></span>
