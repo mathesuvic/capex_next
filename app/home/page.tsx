@@ -57,6 +57,102 @@ export default function Home() {
             </div>
           </Link>
 
+          {/* Card 3: Relatórios */}
+          <div className="group cursor-pointer">
+            <div className="bg-white rounded-xl border border-border p-8 shadow-sm hover:shadow-md transition-all duration-300 h-full flex flex-col">
+              <div className="w-12 h-12 rounded-lg bg-orange-100 flex items-center justify-center mb-4 group-hover:bg-orange-200 transition-colors">
+                <svg className="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-foreground mb-2">Relatórios</h2>
+              <p className="text-muted-foreground text-sm mb-6 flex-grow">
+                Gere relatórios executivos e análises de desempenho
+              </p>
+              <button className="w-full bg-accent text-foreground font-semibold py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors">
+                Acessar
+              </button>
+            </div>
+          </div>
+
+          {/* Card 4: solicitacao */}
+          <a href="/solicitacao" className="group cursor-pointer block">
+            <div className="bg-white rounded-xl border border-border p-8 shadow-sm hover:shadow-md transition-all duration-300 h-full flex flex-col">
+              <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center mb-4 group-hover:bg-green-200 transition-colors">
+                <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-foreground mb-2">Aprovações</h2>
+              <p className="text-muted-foreground text-sm mb-6 flex-grow">
+                Gerencie solicitações de aprovação de projetos e budgets
+              </p>
+              <button className="w-full bg-primary text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
+                Acessar
+              </button>
+            </div>
+          </a>
+
+          {/* Card 5: Configurações */}
+          <div className="group cursor-pointer">
+            <div className="bg-white rounded-xl border border-border p-8 shadow-sm hover:shadow-md transition-all duration-300 h-full flex flex-col">
+              <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center mb-4 group-hover:bg-blue-200 transition-colors">
+                <svg className="w-6 h-6 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-foreground mb-2">Configurações</h2>
+              <p className="text-muted-foreground text-sm mb-6 flex-grow">
+                Gerencie suas preferências e configurações de conta
+              </p>
+              <button className="w-full bg-secondary text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">
+                Acessar
+              </button>
+            </div>
+          </div>
+
+          {/* Card 6: Suporte */}
+          <div className="group cursor-pointer">
+            <div className="bg-white rounded-xl border border-border p-8 shadow-sm hover:shadow-md transition-all duration-300 h-full flex flex-col">
+              <div className="w-12 h-12 rounded-lg bg-orange-100 flex items-center justify-center mb-4 group-hover:bg-orange-200 transition-colors">
+                <svg className="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-foreground mb-2">Suporte</h2>
+              <p className="text-muted-foreground text-sm mb-6 flex-grow">
+                Entre em contato com o time de suporte para dúvidas
+              </p>
+              <button className="w-full bg-accent text-foreground font-semibold py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors">
+                Acessar
+              </button>
+            </div>
+          </div>
+       
+
+          
+
           {/* Os outros cards podem ficar como estavam */}
           {/* ... (Relatórios, Aprovações, Configurações, Suporte) ... */}
         </div>
