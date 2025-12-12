@@ -1,72 +1,144 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Plus, X } from "lucide-react";
-import Link from "next/link";
+import { useState } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ArrowLeft, Plus, X, AlertCircle } from "lucide-react"
+import Link from "next/link"
 
 interface Physical {
-  id: string;
-  description: string;
-  justification: string;
+  id: string
+  plan: string
+  description: string
+  justification: string
+  amount: number
+  seasonalization: { month: string; value: number }[]
 }
 
 const months = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
-];
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+]
 
-export default function Page() {
-  const [investmentPlan, setInvestmentPlan] = useState("");
-  const [value, setValue] = useState("");
-  const [physicals, setPhysicals] = useState<Physical[]>([]);
-  const [newPhysical, setNewPhysical] = useState({ description: "", justification: "" });
-  const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
+const formatBRL = (n: number) =>
+  n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 })
+
+export default function ApprovalsPage() {
+  const [physicals, setPhysicals] = useState<Physical[]>([])
+
+  // Físico em edição (novo)
+  const [newPhysical, setNewPhysical] = useState({
+    plan: "",
+    description: "",
+    justification: "",
+    amount: "" as string, // manter string para controlar input
+  })
+  const [newMonthlyValues, setNewMonthlyValues] = useState<Record<string, string>>({})
+
+  const parseNumber = (val: string) => Number.parseFloat((val || "").toString().replace(",", ".")) || 0
+
+  // Totais do Físico em edição
+  const amountNumber = parseNumber(newPhysical.amount)
+  const distributedNew = Object.values(newMonthlyValues).reduce((s, v) => s + parseNumber(v), 0)
+  const remainingNew = amountNumber - distributedNew
+  const isBalancedNew = amountNumber > 0 && Math.abs(remainingNew) < 0.01
+
+  const handleMonthlyValueChangeNew = (month: string, monthValue: string) => {
+    setNewMonthlyValues((prev) => ({ ...prev, [month]: monthValue }))
+  }
+
+  const resetNewPhysical = () => {
+    setNewPhysical({ plan: "", description: "", justification: "", amount: "" })
+    setNewMonthlyValues({})
+  }
 
   const handleAddPhysical = () => {
-    if (newPhysical.description && newPhysical.justification) {
-      setPhysicals((prev) => [...prev, { id: Date.now().toString(), ...newPhysical }]);
-      setNewPhysical({ description: "", justification: "" });
+    const description = newPhysical.description.trim()
+    const justification = newPhysical.justification.trim()
+    const plan = newPhysical.plan
+
+    if (!plan) {
+      alert("Selecione um plano de investimento para o físico.")
+      return
     }
-  };
+    if (!description || !justification) {
+      alert("Preencha descrição e justificativa do físico.")
+      return
+    }
+    if (!amountNumber || amountNumber <= 0) {
+      alert("Informe um valor de aporte válido para o físico.")
+      return
+    }
+    if (!isBalancedNew) {
+      alert("A sazonalização do físico precisa somar exatamente o valor do aporte.")
+      return
+    }
+
+    const seasonalization = months
+      .filter((m) => parseNumber(newMonthlyValues[m]) > 0)
+      .map((m) => ({ month: m, value: parseNumber(newMonthlyValues[m]) }))
+
+    setPhysicals((prev) => [
+      ...prev,
+      {
+        id: crypto?.randomUUID?.() ?? Date.now().toString(),
+        plan,
+        description,
+        justification,
+        amount: amountNumber,
+        seasonalization,
+      },
+    ])
+
+    resetNewPhysical()
+  }
 
   const handleRemovePhysical = (id: string) => {
-    setPhysicals((prev) => prev.filter((p) => p.id !== id));
-  };
+    setPhysicals((prev) => prev.filter((p) => p.id !== id))
+  }
 
-  const handleMonthToggle = (month: string) => {
-    setSelectedMonths((prev) => {
-      const next = new Set(prev);
-      next.has(month) ? next.delete(month) : next.add(month);
-      return next;
-    });
-  };
+  const resetAll = () => {
+    setPhysicals([])
+    resetNewPhysical()
+  }
 
   const handleSubmit = () => {
-    if (!investmentPlan || !value || physicals.length === 0 || selectedMonths.size === 0) {
-      alert("Por favor, preencha todos os campos obrigatórios");
-      return;
+    if (physicals.length === 0) {
+      alert("Adicione pelo menos um físico (com sazonalização) antes de enviar.")
+      return
     }
+
     console.log({
-      investmentPlan,
-      value,
       physicals,
-      seasonalization: Array.from(selectedMonths),
-    });
-    alert("Solicitação enviada com sucesso!");
-  };
+    })
+
+    alert("Solicitação enviada com sucesso!")
+    resetAll()
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-background to-slate-50 p-6">
       <div className="max-w-4xl mx-auto">
+        {/* Header with Back Button */}
         <div className="mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 text-primary hover:text-green-700 transition-colors mb-4">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-primary hover:text-green-700 transition-colors mb-4"
+          >
             <ArrowLeft className="w-4 h-4" />
             <span className="font-medium">Voltar ao Portal</span>
           </Link>
@@ -78,22 +150,23 @@ export default function Page() {
             </div>
             <h1 className="text-3xl font-bold text-foreground">Aprovações de Recursos</h1>
           </div>
-          <p className="text-muted-foreground text-base ml-13">
+          <p className="text-muted-foreground text-base ml-12">
             Solicite aprovação de recursos para seus planos de investimento
           </p>
         </div>
 
         <div className="space-y-6">
+          {/* Card: Adicionar Físico (com Plano e Sazonalização) */}
           <Card>
             <CardHeader>
-              <CardTitle>Informações Básicas</CardTitle>
-              <CardDescription>Dados principais da solicitação</CardDescription>
+              <CardTitle>Novo Físico</CardTitle>
+              <CardDescription>Informe os dados, o plano de investimento e a sazonalização deste físico</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="plan">Plano de Investimento *</Label>
-                  <Select value={investmentPlan} onValueChange={setInvestmentPlan}>
+                  <Select value={newPhysical.plan} onValueChange={(v) => setNewPhysical((p) => ({ ...p, plan: v }))}>
                     <SelectTrigger id="plan">
                       <SelectValue placeholder="Selecione um plano" />
                     </SelectTrigger>
@@ -109,116 +182,174 @@ export default function Page() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="value">Valor do Aporte (R$) *</Label>
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg font-semibold text-primary">R$</span>
-                    <Input
-                      id="value"
-                      type="number"
-                      placeholder="0,00"
-                      value={value}
-                      onChange={(e) => setValue(e.target.value)}
-                      className="flex-1"
-                    />
+                  <Label htmlFor="amount">Valor do Aporte (R$) *</Label>
+                  <Input
+                    id="amount"
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    placeholder="0,00"
+                    value={newPhysical.amount}
+                    onChange={(e) => setNewPhysical((p) => ({ ...p, amount: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Descrição do Físico *</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Ex: Instalação de painéis solares na subestação X"
+                  value={newPhysical.description}
+                  onChange={(e) => setNewPhysical((p) => ({ ...p, description: e.target.value }))}
+                  className="min-h-[80px]"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="justification">Justificativa *</Label>
+                <Textarea
+                  id="justification"
+                  placeholder="Ex: Aumentar capacidade de geração, reduzir custos operacionais"
+                  value={newPhysical.justification}
+                  onChange={(e) => setNewPhysical((p) => ({ ...p, justification: e.target.value }))}
+                  className="min-h-[80px]"
+                />
+              </div>
+
+              {/* Sazonalização do Físico em edição */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-slate-100 rounded-lg">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Valor do Físico</p>
+                    <p className="text-xl font-bold text-primary">{formatBRL(amountNumber)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Distribuído</p>
+                    <p className="text-xl font-bold text-blue-600">{formatBRL(distributedNew)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Restante</p>
+                    <p className={`text-xl font-bold ${remainingNew >= 0 ? "text-orange-600" : "text-red-600"}`}>
+                      {formatBRL(remainingNew)}
+                    </p>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Detalhes dos Físicos</CardTitle>
-              <CardDescription>Adicione uma descrição e justificativa para cada item físico</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4 border-b border-border pb-6">
-                <div className="space-y-2">
-                  <Label htmlFor="description">Descrição do Físico *</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="Ex: Instalação de painéis solares na subestação X"
-                    value={newPhysical.description}
-                    onChange={(e) => setNewPhysical({ ...newPhysical, description: e.target.value })}
-                    className="min-h-20"
-                  />
-                </div>
+                {!isBalancedNew && amountNumber > 0 && (
+                  <div className="flex items-start gap-3 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                    <AlertCircle className="w-5 h-5 text-orange-600 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-orange-900">
+                        Atenção: a soma dos valores mensais deve ser igual ao valor do físico.
+                      </p>
+                    </div>
+                  </div>
+                )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="justification">Justificativa *</Label>
-                  <Textarea
-                    id="justification"
-                    placeholder="Ex: Aumentar capacidade de geração, reduzir custos operacionais"
-                    value={newPhysical.justification}
-                    onChange={(e) => setNewPhysical({ ...newPhysical, justification: e.target.value })}
-                    className="min-h-20"
-                  />
-                </div>
-
-                <Button onClick={handleAddPhysical} className="w-full bg-primary hover:bg-green-700 text-white flex items-center justify-center gap-2">
-                  <Plus className="w-4 h-4" />
-                  Adicionar Físico
-                </Button>
-              </div>
-
-              {physicals.length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="font-semibold text-foreground">Físicos Adicionados ({physicals.length})</h4>
-                  {physicals.map((physical) => (
-                    <div key={physical.id} className="border border-border rounded-lg p-4 bg-slate-50">
-                      <div className="flex justify-between items-start gap-4">
-                        <div className="flex-1 space-y-2">
-                          <p className="font-medium text-foreground">{physical.description}</p>
-                          <p className="text-sm text-muted-foreground">{physical.justification}</p>
-                        </div>
-                        <Button onClick={() => handleRemovePhysical(physical.id)} variant="ghost" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50">
-                          <X className="w-4 h-4" />
-                        </Button>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {months.map((month) => (
+                    <div key={month} className="space-y-2">
+                      <Label htmlFor={`new-month-${month}`} className="text-sm font-medium">
+                        {month}
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-primary">R$</span>
+                        <Input
+                          id={`new-month-${month}`}
+                          type="number"
+                          placeholder="0,00"
+                          value={newMonthlyValues[month] || ""}
+                          onChange={(e) => handleMonthlyValueChangeNew(month, e.target.value)}
+                          className="flex-1"
+                          step="0.01"
+                          min="0"
+                          disabled={amountNumber === 0}
+                        />
                       </div>
                     </div>
                   ))}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Previsão de Sazonalização</CardTitle>
-              <CardDescription>Selecione os meses em que o recurso será realizado *</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {months.map((month) => (
-                  <div key={month} className="flex items-center space-x-2">
-                    <Checkbox id={month} checked={selectedMonths.has(month)} onCheckedChange={() => handleMonthToggle(month)} />
-                    <Label htmlFor={month} className="cursor-pointer text-sm font-medium">
-                      {month}
-                    </Label>
-                  </div>
-                ))}
               </div>
 
-              {selectedMonths.size > 0 && (
-                <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
-                  <p className="text-sm text-muted-foreground mb-2">Meses selecionados:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {months.map(
-                      (month) =>
-                        selectedMonths.has(month) && (
-                          <span key={month} className="inline-flex items-center px-3 py-1 rounded-full bg-primary text-white text-sm font-medium">
-                            {month}
-                          </span>
-                        ),
-                    )}
+              <Button
+                onClick={handleAddPhysical}
+                className="w-full bg-primary hover:bg-green-700 text-white flex items-center justify-center gap-2"
+                disabled={
+                  !newPhysical.plan ||
+                  !newPhysical.description.trim() ||
+                  !newPhysical.justification.trim() ||
+                  amountNumber <= 0 ||
+                  !isBalancedNew ||
+                  distributedNew <= 0
+                }
+              >
+                <Plus className="w-4 h-4" />
+                Adicionar Físico
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Lista de Físicos adicionados */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Físicos Adicionados</CardTitle>
+              <CardDescription>Revise os físicos adicionados e suas sazonalizações</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {physicals.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhum físico adicionado ainda.</p>
+              ) : (
+                physicals.map((physical) => (
+                  <div key={physical.id} className="border border-border rounded-lg p-4 bg-slate-50">
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="flex-1 space-y-1">
+                        <div className="text-xs text-muted-foreground">Plano: {physical.plan}</div>
+                        <p className="font-medium text-foreground">{physical.description}</p>
+                        <p className="text-sm text-muted-foreground">{physical.justification}</p>
+
+                        <div className="mt-3">
+                          <div className="text-sm font-semibold text-primary">
+                            Valor do Físico: {formatBRL(physical.amount)}
+                          </div>
+                          {physical.seasonalization.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {physical.seasonalization.map((s) => (
+                                <span
+                                  key={`${physical.id}-${s.month}`}
+                                  className="inline-flex items-center px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium"
+                                >
+                                  {s.month}: {formatBRL(s.value)}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <Button
+                        onClick={() => handleRemovePhysical(physical.id)}
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                ))
               )}
             </CardContent>
           </Card>
 
+          {/* Ações */}
           <div className="flex gap-3 pt-4">
-            <Button onClick={handleSubmit} className="flex-1 bg-primary hover:bg-green-700 text-white text-lg py-6">
+            <Button
+              onClick={handleSubmit}
+              className="flex-1 bg-primary hover:bg-green-700 text-white text-lg py-6"
+              disabled={physicals.length === 0}
+            >
               Enviar Solicitação
             </Button>
             <Link href="/" className="flex-1">
@@ -230,5 +361,5 @@ export default function Page() {
         </div>
       </div>
     </main>
-  );
+  )
 }
