@@ -20,24 +20,16 @@ interface Physical {
 }
 
 const months = [
-  "Janeiro",
-  "Fevereiro",
-  "Março",
-  "Abril",
-  "Maio",
-  "Junho",
-  "Julho",
-  "Agosto",
-  "Setembro",
-  "Outubro",
-  "Novembro",
-  "Dezembro",
+  "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+  "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro",
 ]
 
 const formatBRL = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 })
 
 export default function ApprovalsPage() {
+  const [email, setEmail] = useState("") // novo
+  const [isSubmitting, setIsSubmitting] = useState(false) // novo
   const [physicals, setPhysicals] = useState<Physical[]>([])
 
   // Físico em edição (novo)
@@ -45,7 +37,7 @@ export default function ApprovalsPage() {
     plan: "",
     description: "",
     justification: "",
-    amount: "" as string, // manter string para controlar input
+    amount: "" as string,
   })
   const [newMonthlyValues, setNewMonthlyValues] = useState<Record<string, string>>({})
 
@@ -71,22 +63,10 @@ export default function ApprovalsPage() {
     const justification = newPhysical.justification.trim()
     const plan = newPhysical.plan
 
-    if (!plan) {
-      alert("Selecione um plano de investimento para o físico.")
-      return
-    }
-    if (!description || !justification) {
-      alert("Preencha descrição e justificativa do físico.")
-      return
-    }
-    if (!amountNumber || amountNumber <= 0) {
-      alert("Informe um valor de aporte válido para o físico.")
-      return
-    }
-    if (!isBalancedNew) {
-      alert("A sazonalização do físico precisa somar exatamente o valor do aporte.")
-      return
-    }
+    if (!plan) return alert("Selecione um plano de investimento para o físico.")
+    if (!description || !justification) return alert("Preencha descrição e justificativa do físico.")
+    if (!amountNumber || amountNumber <= 0) return alert("Informe um valor de aporte válido para o físico.")
+    if (!isBalancedNew) return alert("A sazonalização do físico precisa somar exatamente o valor do aporte.")
 
     const seasonalization = months
       .filter((m) => parseNumber(newMonthlyValues[m]) > 0)
@@ -114,20 +94,40 @@ export default function ApprovalsPage() {
   const resetAll = () => {
     setPhysicals([])
     resetNewPhysical()
+    setEmail("")
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (!email) {
+      alert("Informe o e-mail do solicitante.")
+      return
+    }
     if (physicals.length === 0) {
       alert("Adicione pelo menos um físico (com sazonalização) antes de enviar.")
       return
     }
 
-    console.log({
-      physicals,
-    })
+    setIsSubmitting(true)
+    try {
+      const resp = await fetch("/api/solicitacao-recursos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, physicals }),
+      })
 
-    alert("Solicitação enviada com sucesso!")
-    resetAll()
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}))
+        throw new Error(data?.error || `Falha ao salvar (${resp.status})`)
+      }
+
+      alert("Solicitação enviada e salva no MySQL!")
+      resetAll()
+    } catch (err: any) {
+      console.error(err)
+      alert(err?.message || "Erro ao salvar solicitação")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -156,11 +156,31 @@ export default function ApprovalsPage() {
         </div>
 
         <div className="space-y-6">
-          {/* Card: Adicionar Físico (com Plano e Sazonalização) */}
+          {/* Email do solicitante */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Identificação</CardTitle>
+              <CardDescription>E-mail do solicitante</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="email">E-mail do solicitante *</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="seuemail@empresa.com.br"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card: Adicionar Físico */}
           <Card>
             <CardHeader>
               <CardTitle>Novo Físico</CardTitle>
-              <CardDescription>Informe os dados, o plano de investimento e a sazonalização deste físico</CardDescription>
+              <CardDescription>Informe os dados, o plano e a sazonalização do físico</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -347,10 +367,10 @@ export default function ApprovalsPage() {
           <div className="flex gap-3 pt-4">
             <Button
               onClick={handleSubmit}
-              className="flex-1 bg-primary hover:bg-green-700 text-white text-lg py-6"
-              disabled={physicals.length === 0}
+              className="flex-1 bg-primary hover:bg-green-700 text-white text-lg py-6 disabled:opacity-60"
+              disabled={physicals.length === 0 || isSubmitting}
             >
-              Enviar Solicitação
+              {isSubmitting ? "Enviando..." : "Enviar Solicitação"}
             </Button>
             <Link href="/" className="flex-1">
               <Button variant="outline" className="w-full text-lg py-6 bg-transparent">
