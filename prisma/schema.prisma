@@ -49,3 +49,35 @@ model Transfer {
 
   @@map("transfers")
 }
+
+
+enum StatusSolicitacao {
+  pendente
+  aprovado
+  rejeitado
+}
+
+model SolicitacaoRecursos {
+  id                 String   @id @default(cuid())
+  createdAt          DateTime @default(now())
+  plano_investimento String
+  valor_aporte       Decimal  @db.Decimal(18,2)
+  desc_fisico        String
+  justificativa      String
+  email_solicitante  String
+  status_solicitacao StatusSolicitacao @default(pendente)
+  jan Decimal @db.Decimal(18,2) @default(0)
+  fev Decimal @db.Decimal(18,2) @default(0)
+  mar Decimal @db.Decimal(18,2) @default(0)
+  abr Decimal @db.Decimal(18,2) @default(0)
+  mai Decimal @db.Decimal(18,2) @default(0)
+  jun Decimal @db.Decimal(18,2) @default(0)
+  jul Decimal @db.Decimal(18,2) @default(0)
+  ago Decimal @db.Decimal(18,2) @default(0)
+  set Decimal @db.Decimal(18,2) @default(0)
+  out Decimal @db.Decimal(18,2) @default(0)
+  nov Decimal @db.Decimal(18,2) @default(0)
+  dez Decimal @db.Decimal(18,2) @default(0)
+
+  @@map("solicitacao_recursos")
+}
