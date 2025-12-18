@@ -1,50 +1,69 @@
-"use client"
+'use client';
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-
+import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export default function LoginPage() {
-  const router = useRouter()
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const router = useRouter();
+  const sp = useSearchParams();
+  // middleware usa "next"; mantenho "from" como fallback
+  const nextUrl = sp.get('next') || sp.get('from') || '/home';
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    setLoading(true)
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    if (loading) return;
+
+    setError(null);
+    setLoading(true);
     try {
-      const res = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      })
-      if (!res.ok) throw new Error("Credenciais inválidas")
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // Envie o "next" para a API decidir o destino (ou retornar JSON)
+        body: JSON.stringify({ email, password, next: nextUrl }),
+        // same-origin já envia cookies; include não é necessário, mas não atrapalha
+        credentials: 'same-origin',
+        // Para capturar 303/307 e redirecionar manualmente (fallback)
+        redirect: 'manual',
+      });
 
-      // Cookie 'auth' é setado no servidor. Agora podemos seguir para o app.
-      router.push("/home")
+      // Fallback para APIs que respondem 303/307 com Set-Cookie
+      if (res.status === 303 || res.status === 307) {
+        router.replace(nextUrl);
+        return;
+      }
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || 'Credenciais inválidas');
+      }
+
+      // Fluxo recomendado: API retorna { ok: true, redirectTo }
+      const isJson = res.headers.get('content-type')?.includes('application/json');
+      if (isJson) {
+        const data = await res.json();
+        router.replace(data?.redirectTo || nextUrl || '/home');
+      } else {
+        // Segurança: se não for JSON mas deu ok, navega mesmo assim
+        router.replace(nextUrl || '/home');
+      }
     } catch (err: any) {
-      setError(err.message || "Falha no login")
+      setError(err?.message || 'Falha no login');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-100 p-4">
-      <div className="flex flex-col items-center justify-center text-center">
-        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#00823B]">
-          <span className="text-2xl font-bold text-white">&lt;/&gt;</span>
-        </div>
-        <h1 className="text-4xl font-bold text-slate-800">Neoenergia</h1>
-        <p className="mt-2 text-md text-slate-500">Portal CAPEX - Gerenciamento de Recursos - Coelba</p>
-      </div>
-
       <div className="mt-8 w-full max-w-md rounded-lg bg-white p-8 shadow-lg">
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="grid gap-2">
@@ -52,40 +71,60 @@ export default function LoginPage() {
             <Input
               id="email"
               type="email"
+              autoComplete="email"
               placeholder="admin@neoenergia.com"
               required
+              disabled={loading}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="h-12"
             />
           </div>
+
           <div className="grid gap-2">
             <Label htmlFor="password" className="font-semibold">Senha</Label>
             <Input
               id="password"
               type="password"
+              autoComplete="current-password"
               required
+              disabled={loading}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="h-12"
             />
           </div>
 
+          <div className="flex items-center justify-between mt-4 text-sm">
+            <button
+              type="button"
+              className="text-[#00823B]"
+              onClick={() => router.push('/register')}
+              disabled={loading}
+            >
+              Criar conta
+            </button>
+            <button
+              type="button"
+              className="text-slate-600"
+              onClick={() => router.push('/reset')}
+              disabled={loading}
+            >
+              Esqueci minha senha
+            </button>
+          </div>
+
           {error && <p className="text-sm text-red-600">{error}</p>}
 
-          <Button type="submit" disabled={loading} className="w-full h-12 text-md font-semibold bg-[#00823B] hover:bg-[#00732E]">
-            {loading ? "Entrando..." : "Entrar no Portal"}
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full h-12 text-md font-semibold bg-[#00823B] hover:bg-[#00732E]"
+          >
+            {loading ? 'Entrando...' : 'Entrar no Portal'}
           </Button>
         </form>
-
-        <div className="mt-8 border-t border-slate-200 pt-6">
-          <div className="text-center text-xs text-slate-500">
-            <p className="font-bold mb-1">Credenciais de teste:</p>
-            <p>Email: admin@neoenergia.com</p>
-            <p>Senha: admin123</p>
-          </div>
-        </div>
       </div>
     </main>
-  )
+  );
 }

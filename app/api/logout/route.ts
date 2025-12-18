@@ -1,10 +1,11 @@
-import { NextResponse } from "next/server"
-import { cookies } from "next/headers"
+// app/api/logout/route.ts
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { AUTH_COOKIE } from "@/lib/jwt";
+
+export const runtime = "nodejs";
 
 export async function POST() {
-  // Apague aqui os cookies/tokens que você usa para autenticação
-  cookies().delete("session")   // ajuste o nome do cookie
-  cookies().delete("token")     // se usar outro
-
-  return NextResponse.json({ ok: true })
+  (await cookies()).delete(AUTH_COOKIE);
+  return NextResponse.json({ ok: true });
 }

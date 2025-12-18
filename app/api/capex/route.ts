@@ -1,17 +1,16 @@
 ﻿// app/api/capex/route.ts
-import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
 
-export const runtime = "nodejs"
+export const runtime = "nodejs";
+// opcional para evitar cache em dev:
+// export const revalidate = 0;
 
-/**
- * @description Busca todos os dados de CAPEX e anexa as transferências relacionadas de forma eficiente.
- */
 export async function GET() {
   try {
     const [capexItems, allTransfers] = await Promise.all([
       prisma.capexWeb.findMany({
-        orderBy: { ordem: "asc" },
+        orderBy: [{ plano: "asc" }, { ordem: "asc" }],
       }),
       prisma.transfer.findMany({
         include: {
@@ -19,59 +18,73 @@ export async function GET() {
           to: { select: { capex: true } },
         },
       }),
-    ])
+    ]);
 
-    // Indexa transferências por label de origem (id é Int)
-    const transfersByFromLabel = new Map<string, Array<{ id: number; amount: number; to: string }>>()
+    const toNum = (v: unknown) => (v == null ? 0 : Number(v));
 
-    for (const transfer of allTransfers) {
-      const fromLabel = transfer.from?.capex
-      const toLabel = transfer.to?.capex
-      if (!fromLabel || !toLabel) continue
+    // Indexa transferências por capex de origem
+    const transfersByFrom = new Map<
+      string,
+      Array<{ id: number; amount: number; to: string }>
+    >();
 
-      if (!transfersByFromLabel.has(fromLabel)) {
-        transfersByFromLabel.set(fromLabel, [])
-      }
-      transfersByFromLabel.get(fromLabel)!.push({
-        id: transfer.id,
-        amount: Number(transfer.amount) || 0,
+    for (const t of allTransfers) {
+      const fromLabel = t.from?.capex;
+      const toLabel = t.to?.capex;
+      if (!fromLabel || !toLabel) continue;
+
+      if (!transfersByFrom.has(fromLabel)) transfersByFrom.set(fromLabel, []);
+      transfersByFrom.get(fromLabel)!.push({
+        id: t.id,
+        amount: toNum(t.amount),
         to: toLabel,
-      })
+      });
     }
 
     const monthMapping = [
-      "jan_ano", "fev_ano", "mar_ano", "abr_ano", "mai_ano", "jun_ano",
-      "jul_ano", "ago_ano", "set_ano", "out_ano", "nov_ano", "dez_ano",
-    ] as const
+      "jan_ano",
+      "fev_ano",
+      "mar_ano",
+      "abr_ano",
+      "mai_ano",
+      "jun_ano",
+      "jul_ano",
+      "ago_ano",
+      "set_ano",
+      "out_ano",
+      "nov_ano",
+      "dez_ano",
+    ] as const;
 
-    let planoCount = 0
-    const planoColors = ["bg-blue-50", "bg-green-50", "bg-yellow-50"] as const
+    let planoCount = 0;
+    const planoColors = ["bg-blue-50", "bg-green-50", "bg-yellow-50"] as const;
 
-    const finalData = capexItems.map((dbRow) => {
-      const isSubLevel = dbRow.plano?.startsWith("sub")
-      const isPlano = dbRow.plano === "plano"
+    const finalData = capexItems.map((row) => {
+      const isSubLevel = row.plano?.startsWith("sub");
+      const isPlano = row.plano === "plano";
 
-      const cells = monthMapping.map((key, index) => ({
-        type: index < 10 ? "realizado" : "previsto",
-        value: Number((dbRow as any)[key]) || 0,
-      }))
+      const cells = monthMapping.map((key, idx) => ({
+        type: idx < 10 ? "realizado" : "previsto",
+        value: toNum((row as any)[key]),
+      }));
 
       return {
-        // PK é o próprio label (capex)
-        id: dbRow.capex,
-        label: dbRow.capex,
+        id: row.capex, // PK é o próprio label
+        label: row.capex,
         sublevel: isSubLevel ? 1 : undefined,
         color: isPlano ? planoColors[planoCount++ % planoColors.length] : undefined,
         cells,
-        meta: Number((dbRow as any).meta) || 0,
-        transfers: transfersByFromLabel.get(dbRow.capex) || [],
-      }
-    })
+        meta: toNum((row as any).meta),
+        transfers: transfersByFrom.get(row.capex) ?? [],
+      };
+    });
 
-    return NextResponse.json(finalData, { status: 200 })
-  } catch (e) {
-    console.error("GET /api/capex erro:", e)
-    const errorMessage = e instanceof Error ? e.message : "Erro interno desconhecido"
-    return NextResponse.json({ error: "internal", details: errorMessage }, { status: 500 })
+    return NextResponse.json(finalData, { status: 200 });
+  } catch (e: any) {
+    console.error("GET /api/capex erro:", e);
+    return NextResponse.json(
+      { error: "internal", details: e?.message ?? "Erro interno desconhecido" },
+      { status: 500 }
+    );
   }
 }
