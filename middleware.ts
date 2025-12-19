@@ -1,17 +1,35 @@
-// middleware.ts (ou proxy.ts, mas use apenas UM deles)
+// middleware.ts
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { verifyJWT } from '@/lib/jwt';
+import { verifyJWT, AUTH_COOKIE } from '@/lib/jwt';
 
 export const config = {
-  matcher: ['/capex/:path*', '/api/capex/:path*', '/admin/:path*', '/api/admin/:path*'],
+  matcher: [
+    '/home',
+    '/solicitacao/:path*',
+    '/gerenciar-solicitacao/:path*',
+    '/capex/:path*',
+    '/admin/:path*',
+    '/api/me',
+    '/api/capex/:path*',
+    '/api/solicitacao-recursos/:path*',
+    '/api/admin/:path*',
+  ],
 };
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const token = req.cookies.get('auth')?.value;
+  const isAPI = pathname.startsWith('/api');
+  const token = req.cookies.get(AUTH_COOKIE)?.value;
+
+  const toJSON = (status: number, body: any) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
 
   if (!token) {
+    if (isAPI) return toJSON(401, { error: 'unauthorized' });
     const url = req.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('next', pathname);
@@ -23,13 +41,15 @@ export async function middleware(req: NextRequest) {
     const role = (payload as any)?.role;
 
     if ((pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) && role !== 'ADMIN') {
+      if (isAPI) return toJSON(403, { error: 'forbidden' });
       const url = req.nextUrl.clone();
       url.pathname = '/home';
       return NextResponse.redirect(url);
     }
 
     return NextResponse.next();
-  } catch (e) {
+  } catch {
+    if (isAPI) return toJSON(401, { error: 'invalid_token' });
     const url = req.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('next', pathname);

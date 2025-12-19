@@ -9,7 +9,6 @@ import { Label } from '@/components/ui/label';
 export default function LoginPage() {
   const router = useRouter();
   const sp = useSearchParams();
-  // middleware usa "next"; mantenho "from" como fallback
   const nextUrl = sp.get('next') || sp.get('from') || '/home';
 
   const [email, setEmail] = useState('');
@@ -27,15 +26,11 @@ export default function LoginPage() {
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // Envie o "next" para a API decidir o destino (ou retornar JSON)
         body: JSON.stringify({ email, password, next: nextUrl }),
-        // same-origin já envia cookies; include não é necessário, mas não atrapalha
         credentials: 'same-origin',
-        // Para capturar 303/307 e redirecionar manualmente (fallback)
         redirect: 'manual',
       });
 
-      // Fallback para APIs que respondem 303/307 com Set-Cookie
       if (res.status === 303 || res.status === 307) {
         router.replace(nextUrl);
         return;
@@ -46,13 +41,11 @@ export default function LoginPage() {
         throw new Error(data?.error || 'Credenciais inválidas');
       }
 
-      // Fluxo recomendado: API retorna { ok: true, redirectTo }
       const isJson = res.headers.get('content-type')?.includes('application/json');
       if (isJson) {
         const data = await res.json();
         router.replace(data?.redirectTo || nextUrl || '/home');
       } else {
-        // Segurança: se não for JSON mas deu ok, navega mesmo assim
         router.replace(nextUrl || '/home');
       }
     } catch (err: any) {

@@ -1,11 +1,18 @@
 // app/api/logout/route.ts
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { AUTH_COOKIE } from "@/lib/jwt";
+import { NextResponse } from 'next/server';
+import { AUTH_COOKIE } from '@/lib/jwt';
 
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 
 export async function POST() {
-  (await cookies()).delete(AUTH_COOKIE);
-  return NextResponse.json({ ok: true });
+  const res = NextResponse.json({ ok: true });
+  // zera o cookie no response (compatível com todos os runtimes)
+  res.cookies.set(AUTH_COOKIE, '', {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: 0,
+  });
+  return res;
 }
