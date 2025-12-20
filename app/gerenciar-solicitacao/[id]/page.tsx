@@ -1,5 +1,7 @@
 import { redirect, notFound } from 'next/navigation';
-import prisma from '@/lib/prisma';
+import { NextResponse } from "next/server"
+import prisma from "@/lib/prisma"
+
 import { getCurrentUser, canEditPlan } from '@/lib/auth';
 
 export default async function Page({ params }: { params: { id: string } }) {

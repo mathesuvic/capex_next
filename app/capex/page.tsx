@@ -8,7 +8,9 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function CapexPage() {
-  const token = cookies().get(AUTH_COOKIE)?.value;
+  const jar = await cookies();
+  const token = jar.get(AUTH_COOKIE)?.value;
+
   if (!token) redirect('/login?next=/capex');
 
   try {

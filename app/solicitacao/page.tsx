@@ -136,7 +136,7 @@ export default function ApprovalsPage() {
         {/* Header with Back Button */}
         <div className="mb-8">
           <Link
-            href="/"
+            href="/home"
             className="inline-flex items-center gap-2 text-primary hover:text-green-700 transition-colors mb-4"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -372,7 +372,7 @@ export default function ApprovalsPage() {
             >
               {isSubmitting ? "Enviando..." : "Enviar Solicitação"}
             </Button>
-            <Link href="/" className="flex-1">
+            <Link href="/home" className="flex-1">
               <Button variant="outline" className="w-full text-lg py-6 bg-transparent">
                 Cancelar
               </Button>

@@ -13,12 +13,12 @@ export async function verifyPassword(plain: string, hash: string) {
 }
 
 export async function getCurrentUser() {
-  const jar = cookies(); // não é async
+  const jar = await cookies();
   const token = jar.get(AUTH_COOKIE)?.value;
   if (!token) return null;
 
   try {
-    const payload = await verifyToken(token); // aqui já é o payload
+    const payload = await verifyToken(token);
     return {
       id: String(payload.sub ?? ''),
       email: String((payload as any).email ?? ''),

@@ -137,7 +137,7 @@ export default function ManageRequestsPage() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 text-primary hover:text-green-700 transition-colors mb-4">
+          <Link href="/home" className="inline-flex items-center gap-2 text-primary hover:text-green-700 transition-colors mb-4">
             <ArrowLeft className="w-4 h-4" />
             <span className="font-medium">Voltar ao Portal</span>
           </Link>
