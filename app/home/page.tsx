@@ -1,4 +1,5 @@
-import Link from "next/link"
+// app/home/page.tsx
+import Link from "next/link";
 
 export default function Home() {
   return (
@@ -9,14 +10,17 @@ export default function Home() {
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 10V3L4 14h7v7l9-11h-7z"
+                />
               </svg>
             </div>
             <h1 className="text-4xl font-bold text-foreground">Capex Portal</h1>
           </div>
-          <p className="text-muted-foreground text-lg ml-13">
-            Bem-vindo de volta! Escolha uma opção para começar
-          </p>
+          <p className="text-muted-foreground text-lg ml-13">Bem-vindo de volta! Escolha uma opção para começar</p>
         </div>
 
         {/* Dashboard Grid */}
@@ -26,7 +30,12 @@ export default function Home() {
             <div className="bg-white rounded-xl border border-border p-8 shadow-sm hover:shadow-md transition-all duration-300 h-full flex flex-col">
               <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center mb-4 group-hover:bg-green-200 transition-colors">
                 <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                  />
                 </svg>
               </div>
               <h2 className="text-xl font-bold text-foreground mb-2">Planejamento Capex</h2>
@@ -39,12 +48,17 @@ export default function Home() {
             </div>
           </Link>
 
-          {/* Card 2: Tabela Capex → também /capex (unifica rota) */}
+          {/* Card 2: Tabela Capex → /capex */}
           <Link href="/capex" className="group cursor-pointer block">
             <div className="bg-white rounded-xl border border-border p-8 shadow-sm hover:shadow-md transition-all duration-300 h-full flex flex-col">
               <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center mb-4 group-hover:bg-blue-200 transition-colors">
                 <svg className="w-6 h-6 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
                 </svg>
               </div>
               <h2 className="text-xl font-bold text-foreground mb-2">Tabela de Capex</h2>
@@ -126,29 +140,28 @@ export default function Home() {
             </div>
           </a>
 
-          {/* Card 6: Suporte */}
-          <div className="group cursor-pointer">
+          {/* Card 6: permissao */}
+          <Link href="/home/permissions" className="group cursor-pointer block">
             <div className="bg-white rounded-xl border border-border p-8 shadow-sm hover:shadow-md transition-all duration-300 h-full flex flex-col">
               <div className="w-12 h-12 rounded-lg bg-orange-100 flex items-center justify-center mb-4 group-hover:bg-orange-200 transition-colors">
                 <svg className="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                  />
                 </svg>
               </div>
-              <h2 className="text-xl font-bold text-foreground mb-2">Suporte</h2>
+              <h2 className="text-xl font-bold text-foreground mb-2">Permissão</h2>
               <p className="text-muted-foreground text-sm mb-6 flex-grow">
-                Entre em contato com o time de suporte para dúvidas
+                Solicite permissão para edição dos subplanos
               </p>
-              <button className="w-full bg-accent text-foreground font-semibold py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors">
+              <span className="w-full text-center bg-accent text-foreground font-semibold py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors">
                 Acessar
-              </button>
+              </span>
             </div>
-          </div>
-       
-
-          
-
-          {/* Os outros cards podem ficar como estavam */}
-          {/* ... (Relatórios, Aprovações, Configurações, Suporte) ... */}
+          </Link>
         </div>
 
         {/* Footer */}
@@ -160,5 +173,5 @@ export default function Home() {
         </div>
       </div>
     </main>
-  )
+  );
 }

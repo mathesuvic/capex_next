@@ -19,12 +19,17 @@ model User {
   id           String   @id @default(cuid())
   email        String   @unique
   name         String?
-  passwordHash String
+  passwordHash String?  // ✅ agora pode ser nulo (permite upsert via JWT)
   role         Role     @default(USER)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  resetTokens PasswordResetToken[] @relation("UserToReset")
+  resetTokens  PasswordResetToken[] @relation("UserToReset")
+
+  // ✅ relações de permissão CAPEX
+  permissions  CapexPermission[]
+  requests     PermissionRequest[]
+  decided      PermissionRequest[] @relation("DecidedBy")
 }
 
 model PasswordResetToken {
@@ -111,3 +116,43 @@ model SolicitacaoRecursos {
 
   @@map("solicitacao_recursos")
 }
+
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model CapexPermission {
+  id         String   @id @default(cuid())
+  userId     String
+  capexLabel String   // exatamente igual ao row.label (ex: "1.2 - Linhas de Transmissão")
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, capexLabel])
+  @@index([capexLabel])
+}
+
+model PermissionRequest {
+  id         String        @id @default(cuid())
+  userId     String
+  capexLabel String
+  reason     String?
+  status     RequestStatus @default(PENDING)
+
+  createdAt  DateTime @default(now())
+  decidedAt  DateTime?
+
+  decidedByUserId String?
+  decidedBy       User? @relation("DecidedBy", fields: [decidedByUserId], references: [id])
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([userId])
+}
+
+
