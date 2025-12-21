@@ -10,7 +10,7 @@ export async function GET() {
   try {
     const [capexItems, allTransfers] = await Promise.all([
       prisma.capexWeb.findMany({
-        orderBy: [{ plano: "asc" }, { ordem: "asc" }],
+        orderBy: [{ ordem: "asc" }],
       }),
       prisma.transfer.findMany({
         include: {
