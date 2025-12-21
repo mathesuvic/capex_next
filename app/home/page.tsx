@@ -72,7 +72,7 @@ export default function Home() {
           </Link>
 
           {/* Card 3: Relatórios */}
-          <div className="group cursor-pointer">
+          <a href="/admin/permissions/" className="group cursor-pointer block">
             <div className="bg-white rounded-xl border border-border p-8 shadow-sm hover:shadow-md transition-all duration-300 h-full flex flex-col">
               <div className="w-12 h-12 rounded-lg bg-orange-100 flex items-center justify-center mb-4 group-hover:bg-orange-200 transition-colors">
                 <svg className="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -84,15 +84,15 @@ export default function Home() {
                   />
                 </svg>
               </div>
-              <h2 className="text-xl font-bold text-foreground mb-2">Relatórios</h2>
+              <h2 className="text-xl font-bold text-foreground mb-2">Aprovação edição Subplanos</h2>
               <p className="text-muted-foreground text-sm mb-6 flex-grow">
-                Gere relatórios executivos e análises de desempenho
+                Aprove as permissoes para edição nos subplanos
               </p>
               <button className="w-full bg-accent text-foreground font-semibold py-2 px-4 rounded-lg hover:bg-orange-600 transition-colors">
                 Acessar
               </button>
             </div>
-          </div>
+          </a>
 
           {/* Card 4: solicitacao */}
           <a href="/solicitacao" className="group cursor-pointer block">
@@ -141,7 +141,7 @@ export default function Home() {
           </a>
 
           {/* Card 6: permissao */}
-          <Link href="/home/permissions" className="group cursor-pointer block">
+          <Link href="/permissions" className="group cursor-pointer block">
             <div className="bg-white rounded-xl border border-border p-8 shadow-sm hover:shadow-md transition-all duration-300 h-full flex flex-col">
               <div className="w-12 h-12 rounded-lg bg-orange-100 flex items-center justify-center mb-4 group-hover:bg-orange-200 transition-colors">
                 <svg className="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
