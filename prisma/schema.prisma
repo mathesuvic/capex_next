@@ -1,94 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
-// ===== AUTENTICAÇÃO =====
-
-enum Role {
-  USER
-  EDITOR
-  ADMIN
-}
-
-model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  name         String?
-  passwordHash String?  // ✅ agora pode ser nulo (permite upsert via JWT)
-  role         Role     @default(USER)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  resetTokens  PasswordResetToken[] @relation("UserToReset")
-
-  // ✅ relações de permissão CAPEX
-  permissions  CapexPermission[]
-  requests     PermissionRequest[]
-  decided      PermissionRequest[] @relation("DecidedBy")
-}
-
-model PasswordResetToken {
-  id        String    @id @default(cuid())
-  token     String    @unique
-  userId    String
-  createdAt DateTime  @default(now())
-  usedAt    DateTime?
-
-  user User @relation("UserToReset", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-// ===== CAPEX / TRANSFERÊNCIAS =====
-
 model CapexWeb {
-  ordem   Int?     @default(0)
-  plano   String?  @db.VarChar(10)
-  capex   String   @db.VarChar(50)
-  jan_ano Decimal?
-  fev_ano Decimal?
-  mar_ano Decimal?
-  abr_ano Decimal?
-  mai_ano Decimal?
-  jun_ano Decimal?
-  jul_ano Decimal?
-  ago_ano Decimal?
-  set_ano Decimal?
-  out_ano Decimal?
-  nov_ano Decimal?
-  dez_ano Decimal?
-  meta    Decimal?
-
+  plano         String?    @db.VarChar(10)
+  capex         String     @id @db.VarChar(50)
+  jan_ano       Decimal?   @db.Decimal(18, 2)
+  fev_ano       Decimal?   @db.Decimal(18, 2)
+  mar_ano       Decimal?   @db.Decimal(18, 2)
+  abr_ano       Decimal?   @db.Decimal(18, 2)
+  mai_ano       Decimal?   @db.Decimal(18, 2)
+  jun_ano       Decimal?   @db.Decimal(18, 2)
+  jul_ano       Decimal?   @db.Decimal(18, 2)
+  ago_ano       Decimal?   @db.Decimal(18, 2)
+  set_ano       Decimal?   @db.Decimal(18, 2)
+  out_ano       Decimal?   @db.Decimal(18, 2)
+  nov_ano       Decimal?   @db.Decimal(18, 2)
+  dez_ano       Decimal?   @db.Decimal(18, 2)
+  ordem         Int        @default(0)
+  meta          Decimal?   @db.Decimal(18, 2)
   transfersFrom Transfer[] @relation("TransfersFrom")
   transfersTo   Transfer[] @relation("TransfersTo")
 
-  @@id([capex])
   @@map("capex_web")
 }
 
 model Transfer {
-  id        Int     @id @default(autoincrement())
-  amount    Decimal
-  fromCapex String  @db.VarChar(50)
-  toCapex   String  @db.VarChar(50)
+  id        Int      @id @default(autoincrement())
+  amount    Decimal  @db.Decimal(18, 2)
+  fromCapex String   @db.VarChar(50)
+  toCapex   String   @db.VarChar(50)
+  from      CapexWeb @relation("TransfersFrom", fields: [fromCapex], references: [capex], onDelete: Cascade)
+  to        CapexWeb @relation("TransfersTo", fields: [toCapex], references: [capex], onDelete: Cascade)
 
-  from CapexWeb @relation("TransfersFrom", fields: [fromCapex], references: [capex], onDelete: Cascade, onUpdate: Cascade)
-  to   CapexWeb @relation("TransfersTo", fields: [toCapex], references: [capex], onDelete: Cascade, onUpdate: Cascade)
-
+  @@index([fromCapex])
+  @@index([toCapex])
   @@map("transfers")
-}
-
-// ===== SOLICITAÇÃO DE RECURSOS =====
-
-enum StatusSolicitacao {
-  pendente
-  aprovado
-  rejeitado
 }
 
 model SolicitacaoRecursos {
@@ -99,60 +51,95 @@ model SolicitacaoRecursos {
   desc_fisico        String
   justificativa      String
   email_solicitante  String
+  jan                Decimal           @default(0.00) @db.Decimal(18, 2)
+  fev                Decimal           @default(0.00) @db.Decimal(18, 2)
+  mar                Decimal           @default(0.00) @db.Decimal(18, 2)
+  abr                Decimal           @default(0.00) @db.Decimal(18, 2)
+  mai                Decimal           @default(0.00) @db.Decimal(18, 2)
+  jun                Decimal           @default(0.00) @db.Decimal(18, 2)
+  jul                Decimal           @default(0.00) @db.Decimal(18, 2)
+  ago                Decimal           @default(0.00) @db.Decimal(18, 2)
+  set                Decimal           @default(0.00) @db.Decimal(18, 2)
+  out                Decimal           @default(0.00) @db.Decimal(18, 2)
+  nov                Decimal           @default(0.00) @db.Decimal(18, 2)
+  dez                Decimal           @default(0.00) @db.Decimal(18, 2)
   status_solicitacao StatusSolicitacao @default(pendente)
+  decidedAt          DateTime?         @db.DateTime(0)
+  decidedByEmail     String?
 
-  jan Decimal @default(0) @db.Decimal(18, 2)
-  fev Decimal @default(0) @db.Decimal(18, 2)
-  mar Decimal @default(0) @db.Decimal(18, 2)
-  abr Decimal @default(0) @db.Decimal(18, 2)
-  mai Decimal @default(0) @db.Decimal(18, 2)
-  jun Decimal @default(0) @db.Decimal(18, 2)
-  jul Decimal @default(0) @db.Decimal(18, 2)
-  ago Decimal @default(0) @db.Decimal(18, 2)
-  set Decimal @default(0) @db.Decimal(18, 2)
-  out Decimal @default(0) @db.Decimal(18, 2)
-  nov Decimal @default(0) @db.Decimal(18, 2)
-  dez Decimal @default(0) @db.Decimal(18, 2)
-
+  @@index([status_solicitacao])
   @@map("solicitacao_recursos")
 }
 
+model capexpermission {
+  id         String   @id
+  userId     String
+  capexLabel String
+  createdAt  DateTime @default(now())
+  user       user     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "CapexPermission_userId_fkey")
 
-enum RequestStatus {
+  @@unique([userId, capexLabel], map: "CapexPermission_userId_capexLabel_key")
+  @@index([capexLabel], map: "CapexPermission_capexLabel_idx")
+}
+
+model passwordresettoken {
+  id        String    @id
+  userId    String
+  createdAt DateTime  @default(now())
+  usedAt    DateTime?
+  expiresAt DateTime
+  tokenHash String    @unique(map: "PasswordResetToken_tokenHash_key")
+  user      user      @relation(fields: [userId], references: [id], onDelete: Cascade, map: "PasswordResetToken_userId_fkey")
+
+  @@index([expiresAt], map: "PasswordResetToken_expiresAt_idx")
+  @@index([userId], map: "PasswordResetToken_userId_idx")
+}
+
+model permissionrequest {
+  id                                           String                   @id
+  userId                                       String
+  capexLabel                                   String
+  reason                                       String?
+  status                                       permissionrequest_status @default(PENDING)
+  createdAt                                    DateTime                 @default(now())
+  decidedAt                                    DateTime?
+  decidedByUserId                              String?
+  user_permissionrequest_decidedByUserIdTouser user?                    @relation("permissionrequest_decidedByUserIdTouser", fields: [decidedByUserId], references: [id], map: "PermissionRequest_decidedByUserId_fkey")
+  user_permissionrequest_userIdTouser          user                     @relation("permissionrequest_userIdTouser", fields: [userId], references: [id], onDelete: Cascade, map: "PermissionRequest_userId_fkey")
+
+  @@index([decidedByUserId], map: "PermissionRequest_decidedByUserId_idx")
+  @@index([status], map: "PermissionRequest_status_idx")
+  @@index([userId], map: "PermissionRequest_userId_idx")
+}
+
+model user {
+  id                                                        String               @id
+  email                                                     String               @unique(map: "User_email_key")
+  name                                                      String?
+  passwordHash                                              String?
+  role                                                      user_role            @default(USER)
+  createdAt                                                 DateTime             @default(now())
+  updatedAt                                                 DateTime
+  capexpermission                                           capexpermission[]
+  passwordresettoken                                        passwordresettoken[]
+  permissionrequest_permissionrequest_decidedByUserIdTouser permissionrequest[]  @relation("permissionrequest_decidedByUserIdTouser")
+  permissionrequest_permissionrequest_userIdTouser          permissionrequest[]  @relation("permissionrequest_userIdTouser")
+}
+
+enum StatusSolicitacao {
+  pendente
+  aprovado
+  rejeitado
+}
+
+enum permissionrequest_status {
   PENDING
   APPROVED
   REJECTED
 }
 
-model CapexPermission {
-  id         String   @id @default(cuid())
-  userId     String
-  capexLabel String   // exatamente igual ao row.label (ex: "1.2 - Linhas de Transmissão")
-  createdAt  DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, capexLabel])
-  @@index([capexLabel])
+enum user_role {
+  USER
+  EDITOR
+  ADMIN
 }
-
-model PermissionRequest {
-  id         String        @id @default(cuid())
-  userId     String
-  capexLabel String
-  reason     String?
-  status     RequestStatus @default(PENDING)
-
-  createdAt  DateTime @default(now())
-  decidedAt  DateTime?
-
-  decidedByUserId String?
-  decidedBy       User? @relation("DecidedBy", fields: [decidedByUserId], references: [id])
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([status])
-  @@index([userId])
-}
-
-
