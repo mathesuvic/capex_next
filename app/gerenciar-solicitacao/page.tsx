@@ -1,8 +1,9 @@
+// app/gerenciar-solicitacao/page.tsx
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Search, CheckCircle, XCircle, Eye, Filter } from "lucide-react"
+import { ArrowLeft, Search, CheckCircle, XCircle, Eye, Filter, BarChart3 } from "lucide-react"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -29,7 +30,7 @@ interface Request {
   seasonalization: MonthlyValue[]
   status: "pending" | "approved" | "rejected"
   createdAt: string
-  decidedAt?: string | null // <- NOVO: data da decisão (aprovação/rejeição)
+  decidedAt?: string | null
   requestedBy: string
 }
 
@@ -80,7 +81,6 @@ export default function ManageRequestsPage() {
     return () => controller.abort()
   }, [])
 
-  // PATCH status e sincroniza estado local
   const patchStatus = async (id: string, action: "approve" | "reject") => {
     try {
       setSavingId(id)
@@ -99,7 +99,6 @@ export default function ManageRequestsPage() {
 
       const newLocalStatus: Request["status"] = action === "approve" ? "approved" : "rejected"
 
-      // Preferir decidedAt que venha do backend
       const decidedAtFromApi: string | null | undefined = payload?.decidedAt
       const decidedAtLocalFallback = new Date().toISOString()
       const newDecidedAt = decidedAtFromApi ?? decidedAtLocalFallback
@@ -165,29 +164,45 @@ export default function ManageRequestsPage() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <Link
-            href="/home"
-            className="inline-flex items-center gap-2 text-primary hover:text-green-700 transition-colors mb-4"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="font-medium">Voltar ao Portal</span>
-          </Link>
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <Link
+                href="/home"
+                className="inline-flex items-center gap-2 text-primary hover:text-green-700 transition-colors mb-4"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span className="font-medium">Voltar ao Portal</span>
+              </Link>
 
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                />
-              </svg>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                    />
+                  </svg>
+                </div>
+                <h1 className="text-3xl font-bold text-foreground">Gerenciamento de Solicitações</h1>
+              </div>
+
+              <p className="text-muted-foreground text-base ml-13">
+                Visualize, aprove ou rejeite solicitações de recursos
+              </p>
             </div>
-            <h1 className="text-3xl font-bold text-foreground">Gerenciamento de Solicitações</h1>
-          </div>
 
-          <p className="text-muted-foreground text-base ml-13">Visualize, aprove ou rejeite solicitações de recursos</p>
+            {/* BOTÃO NOVO: ir para /gerenciar-solicitacao/resumo */}
+            <div className="flex gap-2">
+              <Link href="/gerenciar-solicitacao/resumo">
+                <Button variant="outline" className="flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4" />
+                  Ver Resumo
+                </Button>
+              </Link>
+            </div>
+          </div>
         </div>
 
         {/* Loading/Erro */}
@@ -276,7 +291,7 @@ export default function ManageRequestsPage() {
                       {requests.filter((r) => r.status === "approved").length}
                     </p>
                   </div>
-                  <div className="w-12 h--12 rounded-lg bg-green-100 flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center">
                     <CheckCircle className="w-6 h-6 text-green-600" />
                   </div>
                 </div>
@@ -288,7 +303,9 @@ export default function ManageRequestsPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">Rejeitados</p>
-                    <p className="text-2xl font-bold text-red-600">{requests.filter((r) => r.status === "rejected").length}</p>
+                    <p className="text-2xl font-bold text-red-600">
+                      {requests.filter((r) => r.status === "rejected").length}
+                    </p>
                   </div>
                   <div className="w-12 h-12 rounded-lg bg-red-100 flex items-center justify-center">
                     <XCircle className="w-6 h-6 text-red-600" />
@@ -333,9 +350,7 @@ export default function ManageRequestsPage() {
                             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                               <span>
                                 Valor:{" "}
-                                <strong className="text-primary">
-                                  R$ {request.value.toLocaleString("pt-BR")}
-                                </strong>
+                                <strong className="text-primary">R$ {request.value.toLocaleString("pt-BR")}</strong>
                               </span>
                               <span>Solicitante: {request.requestedBy}</span>
                               <span>Data: {formatDateBR(request.createdAt)}</span>
