@@ -1,3 +1,5 @@
+// prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -72,7 +74,7 @@ model SolicitacaoRecursos {
 }
 
 model capexpermission {
-  id         String   @id
+  id         String   @id @default(cuid()) // <-- CORREÇÃO 1
   userId     String
   capexLabel String
   createdAt  DateTime @default(now())
@@ -83,7 +85,7 @@ model capexpermission {
 }
 
 model passwordresettoken {
-  id        String    @id
+  id        String    @id @default(cuid()) // <-- CORREÇÃO 2
   userId    String
   createdAt DateTime  @default(now())
   usedAt    DateTime?
@@ -96,7 +98,7 @@ model passwordresettoken {
 }
 
 model permissionrequest {
-  id                                           String                   @id
+  id                                           String                   @id @default(cuid())
   userId                                       String
   capexLabel                                   String
   reason                                       String?
@@ -113,13 +115,13 @@ model permissionrequest {
 }
 
 model user {
-  id                                                        String               @id
+  id                                                        String               @id @default(cuid()) // <-- CORREÇÃO 3
   email                                                     String               @unique(map: "User_email_key")
   name                                                      String?
   passwordHash                                              String?
   role                                                      user_role            @default(USER)
   createdAt                                                 DateTime             @default(now())
-  updatedAt                                                 DateTime
+  updatedAt                                                 DateTime             @updatedAt // Adicionado @updatedAt que estava faltando
   capexpermission                                           capexpermission[]
   passwordresettoken                                        passwordresettoken[]
   permissionrequest_permissionrequest_decidedByUserIdTouser permissionrequest[]  @relation("permissionrequest_decidedByUserIdTouser")
