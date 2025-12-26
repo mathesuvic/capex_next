@@ -67,7 +67,7 @@ export default function AdminPermissionRequests() {
           <div key={r.id} className="rounded-lg border border-slate-200 p-4">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="font-medium">{r.user.email}</p>
+                <p className="font-medium">{r.user_permissionrequest_userIdTouser.email}</p>
                 <p className="text-sm text-slate-600">Solicitou: {r.capexLabel}</p>
                 {r.reason && <p className="mt-2 text-sm text-slate-700">Motivo: {r.reason}</p>}
               </div>
