@@ -1,4 +1,3 @@
-// app/api/admin/permissions/requests/route.ts
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { parse } from 'cookie';
@@ -6,6 +5,7 @@ import { verifyToken } from '@/lib/jwt';
 import { isAdminEmail } from '@/lib/auth';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
@@ -21,19 +21,15 @@ export async function GET(req: Request) {
     if (!email) throw new Error('Token inválido ou sem email');
 
     const me = await prisma.user.findUnique({ where: { email } });
-    if (!me) throw new Error('Usuário do token não encontrado no banco');
-
-    const isAdmin = me.role === 'ADMIN' || isAdminEmail(me.email);
-    if (!isAdmin) {
+    if (!me || (me.role !== 'ADMIN' && !isAdminEmail(me.email))) {
       return NextResponse.json({ error: 'forbidden' }, { status: 403 });
     }
 
-    // CORREÇÃO: 'permissionrequest' minúsculo e 'include' com o nome da relação correta
-    const items = await prisma.permissionrequest.findMany({
+    const items = await prisma.permissionRequest.findMany({
       where: { status: 'PENDING' },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'asc' },
       include: {
-        user_permissionrequest_userIdTouser: {
+        user: { 
           select: { email: true, name: true },
         },
       },

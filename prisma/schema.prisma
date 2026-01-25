@@ -1,147 +1,89 @@
-// prisma/schema.prisma
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "mongodb"
   url      = env("DATABASE_URL")
 }
 
-model CapexWeb {
-  plano         String?    @db.VarChar(10)
-  capex         String     @id @db.VarChar(50)
-  jan_ano       Decimal?   @db.Decimal(18, 2)
-  fev_ano       Decimal?   @db.Decimal(18, 2)
-  mar_ano       Decimal?   @db.Decimal(18, 2)
-  abr_ano       Decimal?   @db.Decimal(18, 2)
-  mai_ano       Decimal?   @db.Decimal(18, 2)
-  jun_ano       Decimal?   @db.Decimal(18, 2)
-  jul_ano       Decimal?   @db.Decimal(18, 2)
-  ago_ano       Decimal?   @db.Decimal(18, 2)
-  set_ano       Decimal?   @db.Decimal(18, 2)
-  out_ano       Decimal?   @db.Decimal(18, 2)
-  nov_ano       Decimal?   @db.Decimal(18, 2)
-  dez_ano       Decimal?   @db.Decimal(18, 2)
-  ordem         Int        @default(0)
-  meta          Decimal?   @db.Decimal(18, 2)
-  transfersFrom Transfer[] @relation("TransfersFrom")
-  transfersTo   Transfer[] @relation("TransfersTo")
+model Account {
+  id                String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String  @db.ObjectId
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.String
+  access_token      String? @db.String
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.String
+  session_state     String?
 
-  @@map("capex_web")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
 }
 
-model Transfer {
-  id        Int      @id @default(autoincrement())
-  amount    Decimal  @db.Decimal(18, 2)
-  fromCapex String   @db.VarChar(50)
-  toCapex   String   @db.VarChar(50)
-  from      CapexWeb @relation("TransfersFrom", fields: [fromCapex], references: [capex], onDelete: Cascade)
-  to        CapexWeb @relation("TransfersTo", fields: [toCapex], references: [capex], onDelete: Cascade)
-
-  @@index([fromCapex])
-  @@index([toCapex])
-  @@map("transfers")
+model Session {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  sessionToken String   @unique
+  userId       String   @db.ObjectId
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model SolicitacaoRecursos {
-  id                 String            @id @default(cuid())
-  createdAt          DateTime          @default(now())
-  plano_investimento String
-  valor_aporte       Decimal           @db.Decimal(18, 2)
-  desc_fisico        String
-  justificativa      String
-  email_solicitante  String
-  jan                Decimal           @default(0.00) @db.Decimal(18, 2)
-  fev                Decimal           @default(0.00) @db.Decimal(18, 2)
-  mar                Decimal           @default(0.00) @db.Decimal(18, 2)
-  abr                Decimal           @default(0.00) @db.Decimal(18, 2)
-  mai                Decimal           @default(0.00) @db.Decimal(18, 2)
-  jun                Decimal           @default(0.00) @db.Decimal(18, 2)
-  jul                Decimal           @default(0.00) @db.Decimal(18, 2)
-  ago                Decimal           @default(0.00) @db.Decimal(18, 2)
-  set                Decimal           @default(0.00) @db.Decimal(18, 2)
-  out                Decimal           @default(0.00) @db.Decimal(18, 2)
-  nov                Decimal           @default(0.00) @db.Decimal(18, 2)
-  dez                Decimal           @default(0.00) @db.Decimal(18, 2)
-  status_solicitacao StatusSolicitacao @default(pendente)
-  decidedAt          DateTime?         @db.DateTime(0)
-  decidedByEmail     String?
-
-  @@index([status_solicitacao])
-  @@map("solicitacao_recursos")
+enum UserRole {
+  USER
+  ADMIN
 }
 
-model capexpermission {
-  id         String   @id @default(cuid()) // <-- CORREÇÃO 1
-  userId     String
-  capexLabel String
-  createdAt  DateTime @default(now())
-  user       user     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "CapexPermission_userId_fkey")
+model User {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole  @default(USER)
+  accounts      Account[]
+  sessions      Session[]
 
-  @@unique([userId, capexLabel], map: "CapexPermission_userId_capexLabel_key")
-  @@index([capexLabel], map: "CapexPermission_capexLabel_idx")
+  // Relações com PermissionRequest
+  requests  PermissionRequest[] @relation("UserRequests")
+  decisions PermissionRequest[] @relation("AdminDecisions")
 }
 
-model passwordresettoken {
-  id        String    @id @default(cuid()) // <-- CORREÇÃO 2
-  userId    String
-  createdAt DateTime  @default(now())
-  usedAt    DateTime?
-  expiresAt DateTime
-  tokenHash String    @unique(map: "PasswordResetToken_tokenHash_key")
-  user      user      @relation(fields: [userId], references: [id], onDelete: Cascade, map: "PasswordResetToken_userId_fkey")
+model VerificationToken {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  identifier String
+  token      String   @unique
+  expires    DateTime
 
-  @@index([expiresAt], map: "PasswordResetToken_expiresAt_idx")
-  @@index([userId], map: "PasswordResetToken_userId_idx")
+  @@unique([identifier, token])
 }
 
-model permissionrequest {
-  id                                           String                   @id @default(cuid())
-  userId                                       String
-  capexLabel                                   String
-  reason                                       String?
-  status                                       permissionrequest_status @default(PENDING)
-  createdAt                                    DateTime                 @default(now())
-  decidedAt                                    DateTime?
-  decidedByUserId                              String?
-  user_permissionrequest_decidedByUserIdTouser user?                    @relation("permissionrequest_decidedByUserIdTouser", fields: [decidedByUserId], references: [id], map: "PermissionRequest_decidedByUserId_fkey")
-  user_permissionrequest_userIdTouser          user                     @relation("permissionrequest_userIdTouser", fields: [userId], references: [id], onDelete: Cascade, map: "PermissionRequest_userId_fkey")
-
-  @@index([decidedByUserId], map: "PermissionRequest_decidedByUserId_idx")
-  @@index([status], map: "PermissionRequest_status_idx")
-  @@index([userId], map: "PermissionRequest_userId_idx")
-}
-
-model user {
-  id                                                        String               @id @default(cuid()) // <-- CORREÇÃO 3
-  email                                                     String               @unique(map: "User_email_key")
-  name                                                      String?
-  passwordHash                                              String?
-  role                                                      user_role            @default(USER)
-  createdAt                                                 DateTime             @default(now())
-  updatedAt                                                 DateTime             @updatedAt // Adicionado @updatedAt que estava faltando
-  capexpermission                                           capexpermission[]
-  passwordresettoken                                        passwordresettoken[]
-  permissionrequest_permissionrequest_decidedByUserIdTouser permissionrequest[]  @relation("permissionrequest_decidedByUserIdTouser")
-  permissionrequest_permissionrequest_userIdTouser          permissionrequest[]  @relation("permissionrequest_userIdTouser")
-}
-
-enum StatusSolicitacao {
-  pendente
-  aprovado
-  rejeitado
-}
-
-enum permissionrequest_status {
+enum Status {
   PENDING
   APPROVED
   REJECTED
 }
 
-enum user_role {
-  USER
-  EDITOR
-  ADMIN
+model PermissionRequest {
+  id              String   @id @default(cuid())
+  userId          String   @db.ObjectId
+  capexLabel      String
+  reason          String?
+  status          Status   @default(PENDING)
+  createdAt       DateTime @default(now())
+  decidedAt       DateTime?
+  decidedByUserId String?  @db.ObjectId
+
+  // Relações nomeadas
+  user      User @relation("UserRequests", fields: [userId], references: [id], onDelete: Cascade)
+  decidedBy User? @relation("AdminDecisions", fields: [decidedByUserId], references: [id])
 }
+

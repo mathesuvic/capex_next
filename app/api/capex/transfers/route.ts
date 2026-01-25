@@ -1,6 +1,7 @@
-// app/api/capex/transfers/route.ts
+//app/api/capex/transfers/route.ts
+
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import prisma from "@/lib/prisma" // CORREÇÃO AQUI
 
 export const runtime = "nodejs"
 

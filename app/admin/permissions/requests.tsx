@@ -1,4 +1,3 @@
-// app/admin/permissions/requests.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -8,26 +7,36 @@ type ReqItem = {
   capexLabel: string;
   reason: string | null;
   createdAt: string;
-  user: { email: string; name: string | null };
+  user: {
+    email: string;
+    name: string | null;
+  };
 };
 
 export default function AdminPermissionRequests() {
   const [items, setItems] = useState<ReqItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/admin/permissions/requests");
+      const res = await fetch("/api/admin/permissions/requests", {
+        credentials: "include",
+      });
+
       if (!res.ok) {
-        setMsg("Sem acesso ou erro ao carregar.");
+        const errorData = await res.json().catch(() => ({}));
+        setMsg(errorData.details || "Sem acesso ou erro ao carregar.");
         setItems([]);
         return;
       }
       const data = await res.json();
       setItems(data);
+    } catch (err) {
+      setMsg("Falha ao conectar com a API.");
     } finally {
       setLoading(false);
     }
@@ -38,58 +47,72 @@ export default function AdminPermissionRequests() {
   }, []);
 
   async function act(id: string, action: "approve" | "reject") {
+    setProcessingId(id);
     setMsg(null);
-    const res = await fetch(`/api/admin/permissions/requests/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
-    });
 
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      setMsg(j?.error ?? "Erro ao atualizar solicitação.");
-      return;
+    try {
+      const res = await fetch(`/api/admin/permissions/requests/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        const error = new Error(j?.details ?? "Erro ao atualizar solicitação.");
+        throw error;
+      }
+      
+      setItems((prev) => prev.filter((x) => x.id !== id));
+    } catch (err: any) {
+      setMsg(err.message);
+    } finally {
+      setProcessingId(null);
     }
-
-    setItems((prev) => prev.filter((x) => x.id !== id));
   }
+  
+  if (loading) return <p>Carregando solicitações pendentes...</p>;
 
-  if (loading) return <p>Carregando…</p>;
+  if (msg) return <p className="text-red-500">{msg}</p>;
+  
+  if (items.length === 0) return <p>Nenhuma solicitação pendente no momento.</p>;
 
   return (
-    <div className="space-y-3">
-      {msg && <p className="text-sm text-slate-700">{msg}</p>}
-
-      {items.length === 0 ? (
-        <p className="text-slate-600">Nenhuma solicitação pendente.</p>
-      ) : (
-        items.map((r) => (
-          <div key={r.id} className="rounded-lg border border-slate-200 p-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="font-medium">{r.user_permissionrequest_userIdTouser.email}</p>
-                <p className="text-sm text-slate-600">Solicitou: {r.capexLabel}</p>
-                {r.reason && <p className="mt-2 text-sm text-slate-700">Motivo: {r.reason}</p>}
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => act(r.id, "approve")}
-                  className="rounded-md bg-green-700 px-3 py-2 text-white hover:bg-green-800"
-                >
-                  Aprovar
-                </button>
-                <button
-                  onClick={() => act(r.id, "reject")}
-                  className="rounded-md bg-red-600 px-3 py-2 text-white hover:bg-red-700"
-                >
-                  Rejeitar
-                </button>
-              </div>
+    <div className="space-y-4">
+      {items.map((r) => (
+        <div key={r.id} className="border rounded-lg p-4 shadow-sm bg-white">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="font-medium">{r.user?.email || "Usuário desconhecido"}</p>
+              <p className="text-sm text-gray-700">
+                Solicitou: <span className="font-semibold">{r.capexLabel}</span>
+              </p>
+              {r.reason && (
+                <p className="text-sm text-gray-500 mt-1">
+                  Motivo: {r.reason}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => act(r.id, "approve")}
+                disabled={!!processingId}
+                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:bg-gray-400"
+              >
+                {processingId === r.id ? "Processando..." : "Aprovar"}
+              </button>
+              <button
+                onClick={() => act(r.id, "reject")}
+                disabled={!!processingId}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:bg-gray-400"
+              >
+                {processingId === r.id ? "Processando..." : "Rejeitar"}
+              </button>
             </div>
           </div>
-        ))
-      )}
+        </div>
+      ))}
     </div>
   );
 }

@@ -1,18 +1,47 @@
+// app/api/solicitacao/[id]/route.ts
+
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getCurrentUser, canEditPlan } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/auth';
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+// Esta rota agora permite que um usuário edite sua própria PermissionRequest
+export async function PUT(req: Request, context: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await context.params;
+    
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-  const s = await prisma.solicitacao.findUnique({ where: { id: params.id }, select: { id: true, planId: true } });
-  if (!s) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    // CORREÇÃO FINAL: de 'PermissionRequest' (PascalCase) para 'permissionRequest' (camelCase)
+    const requestToEdit = await prisma.permissionRequest.findUnique({
+      where: { id: id },
+    });
 
-  const allowed = await canEditPlan(user.id, s.planId);
-  if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!requestToEdit) {
+      return NextResponse.json({ error: 'Solicitação não encontrada' }, { status: 404 });
+    }
 
-  const body = await req.json();
-  const updated = await prisma.solicitacao.update({ where: { id: params.id }, data: body });
-  return NextResponse.json({ ok: true, data: updated });
+    if (requestToEdit.userId !== user.id) {
+      return NextResponse.json({ error: 'Forbidden: Você não tem permissão para editar esta solicitação' }, { status: 403 });
+    }
+
+    const body = await req.json();
+
+    // E CORREÇÃO FINAL AQUI TAMBÉM: 'permissionRequest'
+    const updatedRequest = await prisma.permissionRequest.update({
+      where: { id: id },
+      data: {
+        reason: body.reason,
+      },
+    });
+
+    return NextResponse.json({ ok: true, data: updatedRequest });
+
+  } catch (err: any) {
+    // Acessar context.params aqui pode dar erro se a Promise rejeitar, então vamos ser mais seguros
+    console.error(`Erro em PUT /api/solicitacao/[id]:`, err.message);
+    return NextResponse.json({ error: 'Erro no servidor', details: err.message }, { status: 500 });
+  }
 }

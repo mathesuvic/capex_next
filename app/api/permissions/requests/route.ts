@@ -1,11 +1,9 @@
-// Cole este código em: app/api/permissions/requests/route.ts
+// app/api/permissions/requests/route.ts
 
 import { NextResponse } from "next/server";
-import { PrismaClient } from '@prisma/client';
+import prisma from "@/lib/prisma"; // CORREÇÃO: Usando a instância única do Prisma
 import { verifyToken } from "@/lib/jwt";
 import { parse } from "cookie";
-
-const prisma = new PrismaClient();
 
 type Body = {
   capexLabel: string;
@@ -33,8 +31,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "capexLabel é obrigatório" }, { status: 400 });
     }
 
-    // CORREÇÃO AQUI: de permissionRequest para permissionrequest
-    const existing = await prisma.permissionrequest.findFirst({
+    // CORREÇÃO AQUI: O nome correto do model é 'permissionRequest'
+    const existing = await prisma.permissionRequest.findFirst({
       where: { userId: user.id, capexLabel, status: "PENDING" },
       select: { id: true },
     });
@@ -43,8 +41,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, requestId: existing.id, alreadyPending: true }, { status: 200 });
     }
 
-    // E CORREÇÃO AQUI: de permissionRequest para permissionrequest
-    const created = await prisma.permissionrequest.create({
+    // E CORREÇÃO AQUI TAMBÉM: 'permissionRequest'
+    const created = await prisma.permissionRequest.create({
       data: {
         userId: user.id,
         capexLabel,
