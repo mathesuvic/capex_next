@@ -1,104 +1,110 @@
-//app/api/capex/transfers/route.ts
+// app/api/capex/transfers/route.ts
 
-import { NextResponse } from "next/server"
-import prisma from "@/lib/prisma" // CORREÇÃO AQUI
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
 
-export const runtime = "nodejs"
+export const runtime = "nodejs";
 
-// Criar transferência
-export async function POST(request: Request) {
-  try {
-    const body = await request.json()
-    const { fromLabel, toLabel, amount } = body as {
-      fromLabel?: string
-      toLabel?: string
-      amount?: number
-    }
-
-    if (!fromLabel || !toLabel || amount === undefined) {
-      return NextResponse.json(
-        { error: "Dados incompletos para criar transferência." },
-        { status: 400 }
-      )
-    }
-
-    const newTransfer = await prisma.transfer.create({
-      data: {
-        amount,
-        from: { connect: { capex: fromLabel } },
-        to: { connect: { capex: toLabel } },
-      },
-    })
-
-    return NextResponse.json(newTransfer, { status: 201 })
-  } catch (e) {
-    console.error("POST /api/capex/transfers erro:", e)
-    const errorMessage = e instanceof Error ? e.message : "Erro interno desconhecido"
-    return NextResponse.json({ error: "internal", details: errorMessage }, { status: 500 })
-  }
-}
-
-// Atualizar transferência (id Int)
 export async function PUT(request: Request) {
+  // TODO: Adicionar verificação de permissão do usuário aqui.
+
   try {
-    const body = await request.json()
-    const { id, amount, toLabel } = body as {
-      id?: number | string
-      amount?: number
-      toLabel?: string
-    }
+    const body = await request.json();
+    // O 'fromLabel' que vem do frontend é, na verdade, o campo 'capex' do seu schema.
+    const { fromLabel, transfers } = body as {
+      fromLabel?: string;
+      transfers?: Array<{ amount: number; to: string }>;
+    };
 
-    const parsedId = typeof id === "string" ? Number(id) : id
-    if (!parsedId || !Number.isInteger(parsedId)) {
+    if (!fromLabel || !Array.isArray(transfers)) {
       return NextResponse.json(
-        { error: "ID da transferência é obrigatório e deve ser inteiro." },
+        { error: "Dados inválidos. 'fromLabel' e 'transfers' (array) são obrigatórios." },
         { status: 400 }
-      )
+      );
     }
 
-    if (!toLabel) {
-      return NextResponse.json(
-        { error: "O destino (toLabel) é obrigatório para atualizar." },
-        { status: 400 }
-      )
-    }
+    const savedAndFormattedTransfers = await prisma.$transaction(async (tx) => {
+      // Passo 1: Encontrar o item de origem usando o modelo e campo corretos.
+      // ANTES: tx.subPlan.findUnique({ where: { label: fromLabel } })
+      // CORRETO: tx.capexWeb.findUnique({ where: { capex: fromLabel } })
+      const originItem = await tx.capexWeb.findUnique({
+        where: { capex: fromLabel },
+      });
 
-    const updatedTransfer = await prisma.transfer.update({
-      where: { id: parsedId },
-      data: {
-        ...(amount !== undefined ? { amount } : {}),
-        to: { connect: { capex: toLabel } },
-      },
-    })
+      if (!originItem) {
+        throw new Error(`Item de origem "${fromLabel}" não foi encontrado.`);
+      }
 
-    return NextResponse.json(updatedTransfer, { status: 200 })
+      // Passo 2: Deletar as transferências antigas usando o campo de relação correto.
+      // ANTES: where: { subplanoOrigemId: originSubPlan.id }
+      // CORRETO: where: { fromCapex: originItem.capex }
+      await tx.transfer.deleteMany({
+        where: { fromCapex: originItem.capex },
+      });
+
+      // Passo 3: Criar as novas transferências (se houver).
+      if (transfers.length > 0) {
+        // Os labels de destino também são o campo 'capex'.
+        const destinationLabels = transfers.map((t) => t.to);
+
+        // Encontra os itens de destino usando o modelo e campo corretos.
+        // ANTES: tx.subPlan.findMany({ where: { label: { in: destinationLabels } } })
+        // CORRETO: tx.capexWeb.findMany({ where: { capex: { in: destinationLabels } } })
+        const destinationItems = await tx.capexWeb.findMany({
+          where: { capex: { in: destinationLabels } },
+        });
+
+        // O 'id' aqui é o próprio campo 'capex'.
+        const destinationMap = new Map(destinationItems.map((d) => [d.capex, d.capex]));
+
+        // Prepara os dados para inserção usando os nomes de coluna corretos.
+        // ANTES: { subplanoOrigemId, subplanoDestinoId, amount }
+        // CORRETO: { fromCapex, toCapex, amount }
+        const dataToCreate = transfers.map((t) => {
+          const destinationCapex = destinationMap.get(t.to);
+          if (!destinationCapex) {
+            throw new Error(`Item de destino "${t.to}" não encontrado.`);
+          }
+          return {
+            fromCapex: originItem.capex, // O campo 'capex' da origem
+            toCapex: destinationCapex,    // O campo 'capex' do destino
+            amount: t.amount,
+          };
+        });
+
+        // Cria as novas transferências.
+        await tx.transfer.createMany({
+          data: dataToCreate,
+        });
+      }
+
+      // Passo 4: Busca e retorna o estado final das transferências da origem.
+      // ANTES: where: { subplanoOrigemId: ... }, include: { to: { select: { label: true } } }
+      // CORRETO: where: { fromCapex: ... }, include: { to: { select: { capex: true } } }
+      return tx.transfer.findMany({
+        where: { fromCapex: originItem.capex },
+        include: {
+          to: {
+            select: { capex: true } // Selecionamos o campo 'capex' do destino
+          }
+        },
+      });
+    });
+
+    // Passo 5: Formata a resposta para o frontend.
+    // ANTES: to: t.to.label
+    // CORRETO: to: t.to.capex
+    const responsePayload = savedAndFormattedTransfers.map(t => ({
+      id: t.id,
+      amount: Number(t.amount), // Garante que o valor retornado seja um número
+      to: t.to.capex,
+    }));
+    
+    return NextResponse.json(responsePayload, { status: 200 });
+
   } catch (e) {
-    console.error("PUT /api/capex/transfers erro:", e)
-    const errorMessage = e instanceof Error ? e.message : "Erro interno desconhecido"
-    return NextResponse.json({ error: "internal", details: errorMessage }, { status: 500 })
-  }
-}
-
-// Deletar transferência (id Int)
-export async function DELETE(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const idParam = searchParams.get("id")
-    const id = idParam ? Number(idParam) : NaN
-
-    if (!Number.isInteger(id)) {
-      return NextResponse.json(
-        { error: "ID da transferência é obrigatório e deve ser inteiro." },
-        { status: 400 }
-      )
-    }
-
-    await prisma.transfer.delete({ where: { id } })
-
-    return NextResponse.json({ message: "Transferência deletada com sucesso." }, { status: 200 })
-  } catch (e) {
-    console.error("DELETE /api/capex/transfers erro:", e)
-    const errorMessage = e instanceof Error ? e.message : "Erro interno desconhecido"
-    return NextResponse.json({ error: "internal", details: errorMessage }, { status: 500 })
+    console.error("PUT /api/capex/transfers erro:", e);
+    const errorMessage = e instanceof Error ? e.message : "Erro interno desconhecido";
+    return NextResponse.json({ error: "internal", details: errorMessage }, { status: 500 });
   }
 }
