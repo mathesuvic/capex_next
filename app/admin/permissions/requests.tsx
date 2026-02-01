@@ -1,3 +1,4 @@
+//app/admin/permissions/requests.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -51,10 +52,12 @@ export default function AdminPermissionRequests() {
     setMsg(null);
 
     try {
+      const apiStatus = action === "approve" ? "APPROVED" : "REJECTED";
+
       const res = await fetch(`/api/admin/permissions/requests/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ status: apiStatus }),
         credentials: "include",
       });
 

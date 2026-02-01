@@ -2,33 +2,47 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { verifyPassword } from '@/lib/auth';
-import { signToken, AUTH_COOKIE } from '@/lib/jwt';
+import { signToken, AUTH_COOKIE } from '@/lib/jwt'; // ✅ CORREÇÃO
+
+export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   const { email, password, next } = await req.json();
 
   if (!email || !password) {
-    return NextResponse.json({ error: 'Informe e-mail e senha' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Informe e-mail e senha' },
+      { status: 400 },
+    );
   }
 
   const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) {
-    return NextResponse.json({ error: 'Credenciais inválidas' }, { status: 401 });
+  if (!user || !user.passwordHash) {
+    return NextResponse.json(
+      { error: 'Credenciais inválidas' },
+      { status: 401 },
+    );
   }
 
-  const hash = (user as any).passwordHash ?? (user as any).password;
-  const ok = await verifyPassword(password, String(hash));
+  const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) {
-    return NextResponse.json({ error: 'Credenciais inválidas' }, { status: 401 });
+    return NextResponse.json(
+      { error: 'Credenciais inválidas' },
+      { status: 401 },
+    );
   }
 
+  // ✅ CORREÇÃO: Usa a nova função signToken centralizada
   const token = await signToken({
-    sub: String((user as any).id),
+    sub: user.id,
     email: user.email,
-    role: (user as any).role ?? 'USER',
+    name: user.name, // envia o nome para o payload
+    role: user.role,
   });
 
   const res = NextResponse.json({ ok: true, redirectTo: next || '/home' });
+
+  // ✅ CORREÇÃO: Usa a constante AUTH_COOKIE centralizada
   res.cookies.set(AUTH_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
@@ -36,5 +50,6 @@ export async function POST(req: NextRequest) {
     path: '/',
     maxAge: 60 * 60 * 24, // 1 dia
   });
+
   return res;
 }

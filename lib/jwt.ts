@@ -1,32 +1,33 @@
 // lib/jwt.ts
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 
-const raw = process.env.JWT_SECRET;
-if (!raw) throw new Error('JWT_SECRET ausente no .env');
+// Nome do cookie que vamos usar
+export const AUTH_COOKIE = 'auth_token';
 
-const secret = new TextEncoder().encode(raw);
+// Chave secreta vinda do .env
+const secretKey = process.env.JWT_SECRET;
+if (!secretKey) {
+  throw new Error('A variável JWT_SECRET não foi definida no arquivo .env');
+}
+const key = new TextEncoder().encode(secretKey);
 
-export const AUTH_COOKIE = 'auth';
-
-// Assina um JWT
-export async function signJWT(payload: JWTPayload, exp: string = '1d') {
+/**
+ * Cria (assina) um novo token JWT.
+ */
+export async function signToken(payload: JWTPayload) {
   return new SignJWT(payload)
-    .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
+    .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime(exp)
-    .sign(secret);
+    .setExpirationTime('1d') // Expira em 1 dia
+    .sign(key);
 }
 
-// Compat: alguns trechos chamam signToken
-export const signToken = signJWT;
-
-// Verifica e retorna o objeto completo do jose (payload + header)
-export async function verifyJWT(token: string) {
-  return jwtVerify(token, secret);
-}
-
-// Verifica e retorna SOMENTE o payload (conveniência/compat)
+/**
+ * Verifica um token JWT. Retorna o payload se for válido, senão lança um erro.
+ */
 export async function verifyToken(token: string): Promise<JWTPayload> {
-  const { payload } = await jwtVerify(token, secret);
+  const { payload } = await jwtVerify(token, key, {
+    algorithms: ['HS256'],
+  });
   return payload;
 }

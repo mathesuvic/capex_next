@@ -189,8 +189,20 @@ const fallbackData: RowData[] = [
 function calculateTotal(rowCells: CellData[]) {
   return rowCells.reduce((sum, c) => sum + (typeof c.value === "number" ? c.value : 0), 0);
 }
+
 const formatNumber = (num: number) => new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(num);
 const formatSigned = (n: number) => `${n > 0 ? "+" : ""}${formatNumber(n)}`;
+
+// ✅ FIX: normalizeLabel precisa existir ANTES de ser usada (e antes dos useEffects que a usam)
+function normalizeLabel(input: string) {
+  return (input ?? "")
+    .toString()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // remove acentos
+    .replace(/\s+/g, " ") // colapsa múltiplos espaços
+    .trim()
+    .toLowerCase();
+}
 
 // ===== Transferências (líquida) =====
 
@@ -354,56 +366,73 @@ export function CapexTable() {
 
   // Carrega dados do CAPEX
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+
     (async () => {
       try {
-        const res = await fetch("/api/capex", { cache: "no-store" });
+        const res = await fetch("/api/capex", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+
         if (!res.ok) throw new Error("Falha ao buscar /api/capex");
-        const json = await res.json();
-        if (!cancelled) setData(json as RowData[]);
+
+        const json = (await res.json()) as RowData[];
+        setData(json);
       } catch (e) {
+        if ((e as any)?.name === "AbortError") return;
         console.error(e);
-        if (!cancelled) setData(fallbackData);
+        setData(fallbackData);
       }
     })();
+
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, []);
 
   // Carrega permissões do usuário logado (para habilitar/desabilitar edição no front)
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+
     (async () => {
       try {
-        const res = await fetch("/api/me/permissions", { cache: "no-store" });
-        if (!res.ok) throw new Error("Falha ao buscar /api/me/permissions");
-        const json = (await res.json()) as PermissionsResponse;
+        const res = await fetch("/api/me/permissions", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
 
-        if (cancelled) return;
+        if (!res.ok) throw new Error("Falha ao buscar /api/me/permissions");
+
+        const json = (await res.json()) as PermissionsResponse;
 
         if (json.isAdmin && json.allowedLabels === "ALL") {
           setIsAdmin(true);
           setAllowedLabels(new Set());
         } else {
           setIsAdmin(false);
-          setAllowedLabels(new Set(json.allowedLabels));
+          // ✅ normaliza para bater com canEditRowLabel() que usa normalizeLabel(row.label)
+          setAllowedLabels(new Set(json.allowedLabels.map(normalizeLabel)));
         }
       } catch (e) {
+        if ((e as any)?.name === "AbortError") return;
+
         // Se falhar, por segurança: não dá permissão a ninguém no front
         console.error(e);
-        if (!cancelled) {
-          setIsAdmin(false);
-          setAllowedLabels(new Set());
-        }
+        setIsAdmin(false);
+        setAllowedLabels(new Set());
       }
     })();
+
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, []);
 
-  const subplans = useMemo(() => data.filter((r) => r.sublevel === 1).map((r) => ({ label: r.label, id: r.id })), [data]);
+  const subplans = useMemo(
+    () => data.filter((r) => r.sublevel === 1).map((r) => ({ label: r.label, id: r.id })),
+    [data]
+  );
   const sublevelOptions = subplans.map((s) => s.label);
   const incomingIndex = buildIncomingIndex(data);
   const displayData = computeDisplay(data, editableMonths);
@@ -423,7 +452,8 @@ export function CapexTable() {
 
   const canEditRowLabel = (row: RowData) => {
     if (isAdmin) return true;
-    return allowedLabels.has(row.label);
+    // Compara o label da linha (normalizado) com os labels permitidos (já normalizados)
+    return allowedLabels.has(normalizeLabel(row.label));
   };
 
   // Atualiza célula e persiste para subplanos em meses editáveis, respeitando permissão por linha
@@ -629,9 +659,7 @@ export function CapexTable() {
                   key={idx}
                   onClick={() => toggleEditableMonth(idx)}
                   className={`text-xs px-2 py-1 rounded border ${
-                    active
-                      ? "bg-[#e6f7f0] border-[#00823B] text-[#00663a]"
-                      : "bg-white hover:bg-slate-50"
+                    active ? "bg-[#e6f7f0] border-[#00823B] text-[#00663a]" : "bg-white hover:bg-slate-50"
                   }`}
                   title={`${m}/25`}
                 >
@@ -683,6 +711,7 @@ export function CapexTable() {
                 </th>
               </tr>
             </thead>
+
             <tbody>
               {displayData.map((row, rowIndex) => {
                 const total = calculateTotal(row.cells);
@@ -714,9 +743,7 @@ export function CapexTable() {
                     >
                       {row.label}
                       {isSubLevel && !canEditRow && (
-                        <div className="mt-1 text-[11px] text-slate-500">
-                          Sem permissão para editar esta linha
-                        </div>
+                        <div className="mt-1 text-[11px] text-slate-500">Sem permissão para editar esta linha</div>
                       )}
                     </td>
 
@@ -751,6 +778,7 @@ export function CapexTable() {
                     <td className="border border-slate-200 px-3 py-3 text-center font-bold text-slate-900 bg-[#fff3e0] min-w-40">
                       <span className="text-sm">{formatNumber(total)}</span>
                     </td>
+
                     <td className="border border-slate-200 px-3 py-3 text-center font-bold text-slate-900 bg-slate-100 min-w-40">
                       <span className="text-sm">{formatNumber(metaVal)}</span>
                     </td>
@@ -768,8 +796,7 @@ export function CapexTable() {
 
                         {isSubLevel && (
                           <span className="text-[11px] text-slate-600">
-                            Entradas:{" "}
-                            <span className="text-emerald-700 font-medium">+{incomingCount}</span> | Saídas:{" "}
+                            Entradas: <span className="text-emerald-700 font-medium">+{incomingCount}</span> | Saídas:{" "}
                             <span className="text-red-700 font-medium">{outgoingCount}</span>
                           </span>
                         )}
@@ -784,7 +811,9 @@ export function CapexTable() {
                               <div className="grid grid-cols-2 gap-4">
                                 {/* ENTRADAS (somente leitura) */}
                                 <div>
-                                  <h4 className="text-xs font-semibold text-emerald-700 mb-2">Entradas (por origem)</h4>
+                                  <h4 className="text-xs font-semibold text-emerald-700 mb-2">
+                                    Entradas (por origem)
+                                  </h4>
                                   <div className="max-h-56 overflow-auto space-y-2">
                                     {incomingList.length > 0 ? (
                                       incomingList.map((inc, idx) => (
@@ -882,7 +911,6 @@ export function CapexTable() {
                                     >
                                       Adicionar saída
                                     </button>
-
                                   </div>
                                 </div>
                               </div>
@@ -908,6 +936,7 @@ export function CapexTable() {
                         )}
                       </div>
                     </td>
+
                     {/* SALDO A DISTRIBUIR = META − MELHOR VISÃO + TRANSFERÊNCIA (líquida) */}
                     <td
                       className={`border border-slate-200 px-3 py-3 text-center min-w-48 ${
@@ -946,6 +975,7 @@ export function CapexTable() {
           MELHOR VISÃO + Transferência.
         </p>
       </div>
+
       {/* Modal do Mapa */}
       {mapOpen && !loading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">

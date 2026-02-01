@@ -1,9 +1,11 @@
 // middleware.ts
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { verifyJWT, AUTH_COOKIE } from '@/lib/jwt';
+// ✅ CORREÇÃO 1: Nome da função importada
+import { verifyToken, AUTH_COOKIE } from '@/lib/jwt';
 
 export const config = {
+  // Sua lógica de rotas foi mantida
   matcher: [
     '/home',
     '/solicitacao/:path*',
@@ -37,10 +39,15 @@ export async function middleware(req: NextRequest) {
   }
 
   try {
-    const { payload } = await verifyJWT(token);
+    // ✅ CORREÇÃO 2: Como o payload é extraído da função
+    const payload = await verifyToken(token);
     const role = (payload as any)?.role;
 
-    if ((pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) && role !== 'ADMIN') {
+    // Sua lógica de verificação de Admin foi mantida
+    if (
+      (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) &&
+      role !== 'ADMIN'
+    ) {
       if (isAPI) return toJSON(403, { error: 'forbidden' });
       const url = req.nextUrl.clone();
       url.pathname = '/home';
@@ -49,10 +56,15 @@ export async function middleware(req: NextRequest) {
 
     return NextResponse.next();
   } catch {
+    // Sua lógica de erro foi mantida
     if (isAPI) return toJSON(401, { error: 'invalid_token' });
     const url = req.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('next', pathname);
-    return NextResponse.redirect(url);
+    
+    // Adicionado para limpar o cookie inválido
+    const response = NextResponse.redirect(url);
+    response.cookies.delete(AUTH_COOKIE);
+    return response;
   }
 }
