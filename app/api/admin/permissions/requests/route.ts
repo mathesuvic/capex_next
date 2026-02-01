@@ -18,7 +18,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const items = await prisma.PermissionRequest.findMany({
+    const items = await prisma.permissionRequest.findMany({
       where: { status: 'PENDING' },
       orderBy: { createdAt: 'asc' },
       include: {

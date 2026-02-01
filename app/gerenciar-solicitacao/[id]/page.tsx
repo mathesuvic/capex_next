@@ -17,11 +17,11 @@ export default async function GerenciarSolicitacaoPage({ params }: PageProps) {
     redirect('/login');
   }
 
-  // CORREÇÃO: Usando 'permissionRequest' e incluindo dados do usuário relacionado.
+  // CORREÇÃO: Usando a relação 'requester' como definido no schema.prisma
   const request = await prisma.permissionRequest.findUnique({
     where: { id: params.id },
     include: {
-      user: { // Incluindo os dados do usuário que fez a solicitação
+      requester: { // <<< MUDANÇA AQUI: de 'user' para 'requester'
         select: {
           name: true,
           email: true,
@@ -49,24 +49,11 @@ export default async function GerenciarSolicitacaoPage({ params }: PageProps) {
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Gerenciar Solicitação</h1>
       
-      {/*
-        AVISO: Adapte seu JSX abaixo!
-        O objeto 'request' agora contém os dados corretos.
-        O campo 'planId' não existe. Use os campos disponíveis:
-        - request.id
-        - request.capexLabel
-        - request.reason
-        - request.status
-        - request.createdAt
-        - request.user.name (nome do solicitante)
-        - request.user.email (email do solicitante)
-      */}
-
-      {/* Exemplo de como você pode exibir os novos dados */}
       <div className="mt-4 border rounded-lg p-4 max-w-2xl">
           <p className="mb-2"><strong>CAPEX Label:</strong> {request.capexLabel}</p>
           <p className="mb-2"><strong>Status:</strong> {request.status}</p>
-          <p className="mb-2"><strong>Solicitante:</strong> {request.user.name} ({request.user.email})</p>
+          {/* CORREÇÃO: Acessando os dados através de 'requester' */}
+          <p className="mb-2"><strong>Solicitante:</strong> {request.requester.name} ({request.requester.email})</p> {/* <<< MUDANÇA AQUI */}
           <p className="mb-2"><strong>Motivo da Solicitação:</strong> {request.reason || 'Nenhum motivo informado'}</p>
           <p><strong>Data da Solicitação:</strong> {new Date(request.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</p>
       </div>

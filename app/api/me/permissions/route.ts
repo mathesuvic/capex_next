@@ -17,7 +17,7 @@ export async function GET() {
     }
 
     // Agora esta linha vai funcionar pois o modelo foi corrigido no schema
-    const perms = await prisma.CapexPermission.findMany({
+    const perms = await prisma.capexPermission.findMany({
       where: { userId: user.id },
       select: { capexLabel: true },
     });
