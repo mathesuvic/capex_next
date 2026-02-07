@@ -1,25 +1,40 @@
 // app/solicitacao/page.tsx
+
 import { redirect } from 'next/navigation'
-import { getCurrentUser } from '@/lib/auth' // Importando a função que você me enviou
+import { getCurrentUser } from '@/lib/auth'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { SolicitacaoForm } from './SolicitacaoForm' // O formulário que será criado abaixo
+import { SolicitacaoForm } from './SolicitacaoForm'
+import prisma from '@/lib/prisma' // 👈 IMPORTANTE: Importar o Prisma
 
 export default async function SolicitacaoPage() {
-  // 1. Busca o usuário logado no servidor
   const user = await getCurrentUser()
 
-  // 2. Se não houver usuário ou e-mail, redireciona para a página de login
   if (!user || !user.email) {
-    // Redireciona para o login, e após logar, volta para esta página
     redirect('/login?callbackUrl=/solicitacao')
   }
 
-  // 3. Renderiza a página, incluindo o cabeçalho e o formulário
+  // --- 👇 LÓGICA DE BUSCA DOS PLANOS ---
+  const plansData = await prisma.capexWeb.findMany({
+    where: {
+      plano: 'subplano', // Filtra onde a coluna 'plano' é igual a 'subplano'
+    },
+    select: {
+      capex: true, // Seleciona apenas a coluna 'capex'
+    },
+    distinct: ['capex'], // Garante que os resultados sejam únicos
+    orderBy: {
+      capex: 'asc', // Ordena os planos em ordem alfabética
+    },
+  })
+
+  // Extrai apenas o texto dos planos para um array simples
+  const investmentPlans = plansData.map((item) => item.capex)
+  // --- FIM DA LÓGICA ---
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-background to-slate-50 p-6">
       <div className="max-w-4xl mx-auto">
-        {/* Cabeçalho da página */}
         <div className="mb-8">
           <Link
             href="/home"
@@ -41,8 +56,8 @@ export default async function SolicitacaoPage() {
           </p>
         </div>
 
-        {/* 4. Renderiza o formulário, passando o e-mail do usuário como uma propriedade */}
-        <SolicitacaoForm userEmail={user.email} />
+        {/* 👇 Passando a lista de planos para o formulário */}
+        <SolicitacaoForm userEmail={user.email} plans={investmentPlans} />
       </div>
     </main>
   )

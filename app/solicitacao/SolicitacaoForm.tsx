@@ -11,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, X, AlertCircle } from "lucide-react"
 import Link from "next/link"
 
-// --- Tipos e Constantes (sem alterações) ---
 interface Physical {
   id: string
   plan: string
@@ -22,18 +21,15 @@ interface Physical {
 }
 const months = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
 const formatBRL = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 })
-// --- Fim dos Tipos e Constantes ---
 
-
-// ✅ MUDANÇA: O componente agora recebe 'userEmail' como uma propriedade (prop)
-export function SolicitacaoForm({ userEmail }: { userEmail: string }) {
-  // ✅ MUDANÇA: O estado 'email' foi removido.
+// 👇 O componente agora recebe 'userEmail' e a nova lista 'plans'
+export function SolicitacaoForm({ userEmail, plans }: { userEmail: string, plans: string[] }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [physicals, setPhysicals] = useState<Physical[]>([])
   const [newPhysical, setNewPhysical] = useState({ plan: "", description: "", justification: "", amount: "" as string })
   const [newMonthlyValues, setNewMonthlyValues] = useState<Record<string, string>>({})
 
-  // --- Funções de Lógica (sem alterações na maior parte) ---
+  // ... (O restante das funções handleAddPhysical, handleSubmit, etc. permanece igual)
   const parseNumber = (val: string) => Number.parseFloat((val || "").toString().replace(",", ".")) || 0
   const amountNumber = parseNumber(newPhysical.amount)
   const distributedNew = Object.values(newMonthlyValues).reduce((s, v) => s + parseNumber(v), 0)
@@ -69,11 +65,9 @@ export function SolicitacaoForm({ userEmail }: { userEmail: string }) {
   const resetAll = () => {
     setPhysicals([])
     resetNewPhysical()
-    // ✅ MUDANÇA: A linha que limpava o e-mail foi removida, pois ele não é mais um estado.
   }
 
   const handleSubmit = async () => {
-    // ✅ MUDANÇA: A verificação de e-mail foi removida daqui.
     if (physicals.length === 0) {
       alert("Adicione pelo menos um físico (com sazonalização) antes de enviar.")
       return
@@ -84,7 +78,6 @@ export function SolicitacaoForm({ userEmail }: { userEmail: string }) {
       const resp = await fetch("/api/solicitacao-recursos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // ✅ MUDANÇA: Passando 'userEmail' (da propriedade) no corpo da requisição.
         body: JSON.stringify({ email: userEmail, physicals }),
       })
 
@@ -93,7 +86,7 @@ export function SolicitacaoForm({ userEmail }: { userEmail: string }) {
         throw new Error(data?.error || `Falha ao salvar (${resp.status})`)
       }
 
-      alert("Solicitação enviada e salva no MySQL!")
+      alert("Solicitação enviada e salva com sucesso!")
       resetAll()
     } catch (err: any) {
       console.error(err)
@@ -105,16 +98,30 @@ export function SolicitacaoForm({ userEmail }: { userEmail: string }) {
 
   return (
     <div className="space-y-6">
-      {/* ✅ MUDANÇA: O Card de "Identificação" foi completamente removido do JSX. */}
-      
-      {/* O resto do formulário permanece igual */}
       <Card>
         <CardHeader><CardTitle>Novo Físico</CardTitle><CardDescription>Informe os dados, o plano e a sazonalização do físico</CardDescription></CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2"><Label htmlFor="plan">Plano de Investimento *</Label><Select value={newPhysical.plan} onValueChange={(v) => setNewPhysical((p) => ({ ...p, plan: v }))}><SelectTrigger id="plan"><SelectValue placeholder="Selecione um plano" /></SelectTrigger><SelectContent><SelectItem value="infraestrutura">Infraestrutura de Rede</SelectItem><SelectItem value="energia-renovavel">Energia Renovável</SelectItem><SelectItem value="eficiencia-energetica">Eficiência Energética</SelectItem><SelectItem value="transformadores">Transformadores e Equipamentos</SelectItem><SelectItem value="tecnologia">Tecnologia e Automação</SelectItem><SelectItem value="sustentabilidade">Sustentabilidade</SelectItem></SelectContent></Select></div>
+            <div className="space-y-2">
+              <Label htmlFor="plan">Plano de Investimento *</Label>
+              <Select value={newPhysical.plan} onValueChange={(v) => setNewPhysical((p) => ({ ...p, plan: v }))}>
+                <SelectTrigger id="plan">
+                  <SelectValue placeholder="Selecione um plano" />
+                </SelectTrigger>
+                {/* --- 👇 CONTEÚDO DINÂMICO DO SELECT --- */}
+                <SelectContent>
+                  {plans.map((plan) => (
+                    <SelectItem key={plan} value={plan}>
+                      {plan}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+                {/* --- FIM DO CONTEÚDO DINÂMICO --- */}
+              </Select>
+            </div>
             <div className="space-y-2"><Label htmlFor="amount">Valor do Aporte (R$) *</Label><Input id="amount" type="number" inputMode="decimal" step="0.01" min="0" placeholder="0,00" value={newPhysical.amount} onChange={(e) => setNewPhysical((p) => ({ ...p, amount: e.target.value }))} /></div>
           </div>
+          {/* ... O resto do JSX continua igual ... */}
           <div className="space-y-2"><Label htmlFor="description">Descrição do Físico *</Label><Textarea id="description" placeholder="Ex: Instalação de painéis solares na subestação X" value={newPhysical.description} onChange={(e) => setNewPhysical((p) => ({ ...p, description: e.target.value }))} className="min-h-[80px]" /></div>
           <div className="space-y-2"><Label htmlFor="justification">Justificativa *</Label><Textarea id="justification" placeholder="Ex: Aumentar capacidade de geração, reduzir custos operacionais" value={newPhysical.justification} onChange={(e) => setNewPhysical((p) => ({ ...p, justification: e.target.value }))} className="min-h-[80px]" /></div>
           <div className="space-y-4">
