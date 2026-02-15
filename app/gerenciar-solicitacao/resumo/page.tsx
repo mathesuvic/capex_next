@@ -7,13 +7,15 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { XIcon } from "lucide-react"
 
-// --- Type RequestItem ATUALIZADO ---
+// --- Types ---
 type RequestItem = {
   id: string
   type: string
-  natureza: string // <-- Garante que a natureza sempre exista
+  natureza: string
+  desc_fisico: string
   investmentPlan: string
   totalValue: number
   status: StatusFront
@@ -21,14 +23,8 @@ type RequestItem = {
   requestedBy: string
   monthlyDistribution: Record<"jan" | "fev" | "mar" | "abr" | "mai" | "jun" | "jul" | "ago" | "set" | "out" | "nov" | "dez", number>
 }
-// --- Outros Types ---
 type StatusFront = "approved" | "pending" | "rejected"
-type SummaryResponse = {
-  ok: boolean
-  error?: string
-  updatedAt: string
-  requests: RequestItem[]
-}
+type SummaryResponse = { ok: boolean; error?: string; updatedAt: string; requests: RequestItem[] }
 const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"] as const
 const PIE_COLORS = ["hsl(var(--primary))", "hsl(var(--secondary))", "hsl(var(--accent))", "#f59e0b", "#10b981", "#3b82f6"]
 
@@ -61,15 +57,22 @@ export default function DashboardResumoSolicitacoesPage() {
     return () => controller.abort()
   }, [statusFilter])
 
-  const handleDrilldown = (key: string, value: any) => {
+  const handleFilterChange = (key: string, value: any) => {
+    const new_value = value === 'all' ? null : value
     setActiveFilters((prev) => ({
       ...Object.fromEntries(Object.entries(prev).filter(([k]) => k !== key && k !== "month")),
-      [key]: prev[key] === value ? null : value,
+      [key]: prev[key] === new_value ? null : new_value,
     }))
   }
 
   const processedData = useMemo(() => {
     if (!data) return null
+
+    const filterOptions = {
+        types: [...new Set(data.requests.map(r => r.type).filter(Boolean))].sort(),
+        natures: [...new Set(data.requests.map(r => r.natureza).filter(Boolean))].sort(),
+        plans: [...new Set(data.requests.map(r => r.investmentPlan).filter(Boolean))].sort(),
+    }
 
     let filteredRequests = data.requests.filter((req) => {
       return Object.entries(activeFilters).every(([key, value]) => {
@@ -107,10 +110,11 @@ export default function DashboardResumoSolicitacoesPage() {
     const typeData = Array.from(reduceToMap("type")).map(([name, value]) => ({ name, value }))
     const natureData = Array.from(reduceToMap("natureza")).map(([name, total]) => ({ name, total }))
     
-    return { stats, monthlyData, planData, typeData, natureData, filteredRequests }
+    return { stats, monthlyData, planData, typeData, natureData, filteredRequests, filterOptions }
   }, [data, activeFilters])
 
   const formatCurrency = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value)
+  
   const getStatusBadge = (status: StatusFront) => {
     const statusMap: Record<StatusFront, { label: string; className: string }> = {
       approved: { label: "Aprovado", className: "bg-green-600 hover:bg-green-700" },
@@ -137,7 +141,21 @@ export default function DashboardResumoSolicitacoesPage() {
 
         {!loading && !error && data && processedData && (
           <>
-            <Card><CardHeader><CardTitle>Filtros</CardTitle><CardDescription>Filtre os dados por status de aprovação</CardDescription></CardHeader><CardContent><div className="flex gap-3 flex-wrap"><Button variant={statusFilter === "all" ? "default" : "outline"} onClick={() => setStatusFilter("all")}>Todos</Button><Button variant={statusFilter === "approved" ? "default" : "outline"} onClick={() => setStatusFilter("approved")}>Aprovados</Button><Button variant={statusFilter === "pending" ? "default" : "outline"} onClick={() => setStatusFilter("pending")}>Pendentes</Button><Button variant={statusFilter === "rejected" ? "default" : "outline"} onClick={() => setStatusFilter("rejected")}>Rejeitados</Button></div></CardContent></Card>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader><CardTitle>Filtros Gerais</CardTitle></CardHeader>
+                <CardContent className="flex gap-3 flex-wrap"><Button variant={statusFilter === "all" ? "default" : "outline"} onClick={() => setStatusFilter("all")}>Todos Status</Button><Button variant={statusFilter === "approved" ? "default" : "outline"} onClick={() => setStatusFilter("approved")}>Aprovados</Button><Button variant={statusFilter === "pending" ? "default" : "outline"} onClick={() => setStatusFilter("pending")}>Pendentes</Button><Button variant={statusFilter === "rejected" ? "default" : "outline"} onClick={() => setStatusFilter("rejected")}>Rejeitados</Button></CardContent>
+              </Card>
+              
+              <Card>
+                  <CardHeader><CardTitle>Filtros Adicionais</CardTitle></CardHeader>
+                  <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <Select value={activeFilters.type || 'all'} onValueChange={(v) => handleFilterChange('type', v)}><SelectTrigger><SelectValue placeholder="Filtrar por tipo..." /></SelectTrigger><SelectContent><SelectItem value="all">Todos os Tipos</SelectItem>{processedData.filterOptions.types.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select>
+                      <Select value={activeFilters.nature || 'all'} onValueChange={(v) => handleFilterChange('nature', v)}><SelectTrigger><SelectValue placeholder="Filtrar por natureza..." /></SelectTrigger><SelectContent><SelectItem value="all">Todas as Naturezas</SelectItem>{processedData.filterOptions.natures.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent></Select>
+                      <Select value={activeFilters.plan || 'all'} onValueChange={(v) => handleFilterChange('plan', v)}><SelectTrigger><SelectValue placeholder="Filtrar por plano..." /></SelectTrigger><SelectContent><SelectItem value="all">Todos os Planos</SelectItem>{processedData.filterOptions.plans.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select>
+                  </CardContent>
+              </Card>
+            </div>
 
             {Object.values(activeFilters).some(v => v !== null) && (
               <Card>
@@ -146,7 +164,7 @@ export default function DashboardResumoSolicitacoesPage() {
                   {Object.entries(activeFilters).map(([key, value]) => value && (
                       <Badge key={key} variant="secondary" className="text-sm gap-1">
                         <span className="capitalize">{key}:</span> {value}
-                        <button onClick={() => handleDrilldown(key, value)} className="rounded-full hover:bg-background/50 p-0.5"><XIcon className="h-3 w-3" /></button>
+                        <button onClick={() => handleFilterChange(key, value)} className="rounded-full hover:bg-background/50 p-0.5"><XIcon className="h-3 w-3" /></button>
                       </Badge>
                   ))}
                   <Button variant="ghost" size="sm" onClick={() => setActiveFilters({})}>Limpar filtros</Button>
@@ -161,7 +179,7 @@ export default function DashboardResumoSolicitacoesPage() {
                 <Card className="border-l-4 border-l-accent"><CardHeader><CardDescription>Rejeitados</CardDescription><CardTitle className="text-2xl text-accent">{formatCurrency(processedData.stats.rejected)}</CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground">{processedData.stats.rejectedCount} solicitações</p></CardContent></Card>
             </div>
             
-            <Card><CardHeader><CardTitle>Distribuição Mensal</CardTitle><CardDescription>Clique para filtrar por mês</CardDescription></CardHeader><CardContent><ChartContainer config={{}} className="h-[250px] w-full"><ResponsiveContainer><AreaChart data={processedData.monthlyData} onClick={(d) => d && handleDrilldown("month", d.activeLabel)}><defs><linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.8} /><stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0.1} /></linearGradient></defs><CartesianGrid vertical={false} /><XAxis dataKey="name" tickLine={false} tickMargin={10} axisLine={false} /><YAxis tickFormatter={(value) => `R$${Number(value) / 1000}k`} tickLine={false} axisLine={false} /><ChartTooltip cursor={true} content={<ChartTooltipContent formatter={(value) => formatCurrency(Number(value))} />} /><Area dataKey="total" type="monotone" fill="url(#colorTotal)" stroke="var(--color-primary)" strokeWidth={2} style={{cursor: "pointer"}}/></AreaChart></ResponsiveContainer></ChartContainer></CardContent></Card>
+            <Card><CardHeader><CardTitle>Distribuição Mensal</CardTitle><CardDescription>Clique para filtrar por mês</CardDescription></CardHeader><CardContent><ChartContainer config={{}} className="h-[250px] w-full"><ResponsiveContainer><AreaChart data={processedData.monthlyData} onClick={(d) => d && handleFilterChange("month", d.activeLabel)}><defs><linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.8} /><stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0.1} /></linearGradient></defs><CartesianGrid vertical={false} /><XAxis dataKey="name" tickLine={false} tickMargin={10} axisLine={false} /><YAxis tickFormatter={(value) => `R$${Number(value) / 1000}k`} tickLine={false} axisLine={false} /><ChartTooltip cursor={true} content={<ChartTooltipContent formatter={(value) => formatCurrency(Number(value))} />} /><Area dataKey="total" type="monotone" fill="url(#colorTotal)" stroke="var(--color-primary)" strokeWidth={2} style={{cursor: "pointer"}}/></AreaChart></ResponsiveContainer></ChartContainer></CardContent></Card>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card>
@@ -170,7 +188,7 @@ export default function DashboardResumoSolicitacoesPage() {
                   <ChartContainer config={{}} className="h-[250px] w-full max-w-[250px]"><ResponsiveContainer>
                     <PieChart>
                       <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-                      <Pie data={processedData.typeData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={80} onClick={(d) => handleDrilldown("type", d.name)} style={{cursor: "pointer"}}>
+                      <Pie data={processedData.typeData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={80} onClick={(d) => handleFilterChange("type", d.name)} style={{cursor: "pointer"}}>
                         {processedData.typeData.map((_, index) => (<Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />))}
                       </Pie>
                       <ChartLegend content={<ChartLegendContent nameKey="name" />} />
@@ -184,7 +202,7 @@ export default function DashboardResumoSolicitacoesPage() {
                   <ChartContainer config={{}} className="h-[250px] w-full"><ResponsiveContainer>
                     <BarChart data={processedData.natureData} layout="vertical">
                       <CartesianGrid horizontal={false} /><YAxis dataKey="name" type="category" tickLine={false} tickMargin={10} axisLine={false} width={120} /><XAxis type="number" hide /><ChartTooltip cursor={false} content={<ChartTooltipContent formatter={(value) => formatCurrency(Number(value))} />} />
-                      <Bar dataKey="total" fill="var(--color-secondary)" radius={4} style={{cursor: "pointer"}} onClick={(d) => handleDrilldown("nature", d.name)} />
+                      <Bar dataKey="total" fill="var(--color-secondary)" radius={4} style={{cursor: "pointer"}} onClick={(d) => handleFilterChange("nature", d.name)} />
                     </BarChart>
                   </ResponsiveContainer></ChartContainer>
                 </CardContent>
@@ -196,7 +214,7 @@ export default function DashboardResumoSolicitacoesPage() {
                 <ChartContainer config={{}} className="h-[350px] w-full"><ResponsiveContainer>
                   <BarChart data={processedData.planData} layout="vertical">
                     <CartesianGrid horizontal={false} /><YAxis dataKey="name" type="category" tickLine={false} tickMargin={10} axisLine={false} width={200} className="text-xs" /><XAxis type="number" hide /><ChartTooltip cursor={false} content={<ChartTooltipContent formatter={(value) => formatCurrency(Number(value))} />} />
-                    <Bar dataKey="total" fill="var(--color-primary)" radius={4} style={{cursor: "pointer"}} onClick={(d) => handleDrilldown("plan", d.name)}/>
+                    <Bar dataKey="total" fill="var(--color-primary)" radius={4} style={{cursor: "pointer"}} onClick={(d) => handleFilterChange("plan", d.name)}/>
                   </BarChart>
                 </ResponsiveContainer></ChartContainer>
               </CardContent>
@@ -211,8 +229,10 @@ export default function DashboardResumoSolicitacoesPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Tipo</TableHead>
+                      <TableHead className="w-[150px]">Tipo</TableHead>
+                      <TableHead className="w-[150px]">Natureza</TableHead>
                       <TableHead>Plano de Investimento</TableHead>
+                      <TableHead>Descrição Física</TableHead>
                       <TableHead className="text-right">Valor</TableHead>
                       <TableHead>Solicitante</TableHead>
                       <TableHead className="text-center">Status</TableHead>
@@ -222,7 +242,9 @@ export default function DashboardResumoSolicitacoesPage() {
                     {processedData.filteredRequests.map((req) => (
                       <TableRow key={req.id}>
                         <TableCell className="font-medium">{req.type}</TableCell>
+                        <TableCell>{req.natureza}</TableCell>
                         <TableCell>{req.investmentPlan}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{req.desc_fisico}</TableCell>
                         <TableCell className="text-right">{formatCurrency(req.totalValue)}</TableCell>
                         <TableCell>{req.requestedBy}</TableCell>
                         <TableCell className="text-center">{getStatusBadge(req.status)}</TableCell>

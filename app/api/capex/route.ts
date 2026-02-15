@@ -1,15 +1,31 @@
 ﻿// app/api/capex/route.ts
-import { NextResponse } from "next/server";
+
+import { NextResponse, type NextRequest } from "next/server"; // Importe o NextRequest
 import prisma from "@/lib/prisma";
 
 export const runtime = "nodejs";
 // opcional para evitar cache em dev:
 // export const revalidate = 0;
 
-export async function GET() {
+export async function GET(req: NextRequest) { // Adicione o 'req: NextRequest'
   try {
+    // --- LÓGICA DO FILTRO ADICIONADA AQUI ---
+    const url = new URL(req.url);
+    const purpose = url.searchParams.get("purpose");
+
+    const whereClause: { plano?: string } = {}; // Objeto para o filtro do Prisma
+
+    // Se a URL contiver "?purpose=dropdown", adicionamos a condição ao filtro
+    if (purpose === "dropdown") {
+      whereClause.plano = "subplano";
+    }
+    // --- FIM DA LÓGICA DO FILTRO ---
+
+
     const [capexItems, allTransfers] = await Promise.all([
       prisma.capexWeb.findMany({
+        // Adicionamos a cláusula 'where' na consulta
+        where: whereClause,
         orderBy: [{ ordem: "asc" }],
       }),
       prisma.transfer.findMany({
@@ -42,18 +58,8 @@ export async function GET() {
     }
 
     const monthMapping = [
-      "jan_ano",
-      "fev_ano",
-      "mar_ano",
-      "abr_ano",
-      "mai_ano",
-      "jun_ano",
-      "jul_ano",
-      "ago_ano",
-      "set_ano",
-      "out_ano",
-      "nov_ano",
-      "dez_ano",
+      "jan_ano", "fev_ano", "mar_ano", "abr_ano", "mai_ano", "jun_ano",
+      "jul_ano", "ago_ano", "set_ano", "out_ano", "nov_ano", "dez_ano",
     ] as const;
 
     let planoCount = 0;

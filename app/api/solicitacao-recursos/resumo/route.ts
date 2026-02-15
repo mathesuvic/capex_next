@@ -2,15 +2,13 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 
-// --- Constantes e Tipos (sem mudanças) ---
+// --- Constantes e Tipos ---
 const monthCols = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"] as const
 type MonthKey = (typeof monthCols)[number]
-const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"] as const
 type StatusDB = "pendente" | "aprovado" | "rejeitado"
 type StatusFront = "pending" | "approved" | "rejected"
 type StatusParamFront = "all" | StatusFront
 const toNumber = (v: unknown): number => { if (v === null || v === undefined) return 0; const s = typeof v === "string" ? v : (v as any).toString?.() ?? String(v); const n = parseFloat(s.replace(",", ".")); return Number.isFinite(n) ? n : 0 }
-const emptyMonths = (): Record<MonthKey, number> => ({ jan: 0, fev: 0, mar: 0, abr: 0, mai: 0, jun: 0, jul: 0, ago: 0, set: 0, out: 0, nov: 0, dez: 0 })
 const statusDbToFront: Record<StatusDB, StatusFront> = { pendente: "pending", aprovado: "approved", rejeitado: "rejected" }
 const statusFrontToDb: Record<StatusFront, StatusDB> = { pending: "pendente", approved: "aprovado", rejected: "rejeitado" }
 
@@ -41,9 +39,8 @@ export async function GET(req: Request) {
       return {
         id: solicitacao.id,
         type: details?.tipo || "N/A",
-        // --- LINHA CORRIGIDA/ADICIONADA AQUI ---
         natureza: details?.natureza || "N/A",
-        // ----------------------------------------
+        desc_fisico: solicitacao.desc_fisico || "",
         investmentPlan: solicitacao.plano_investimento,
         totalValue: toNumber(solicitacao.valor_aporte),
         status: statusDbToFront[solicitacao.status_solicitacao as StatusDB] ?? ("pending" as const),
@@ -53,8 +50,6 @@ export async function GET(req: Request) {
       }
     })
 
-    // Removemos o cálculo antigo daqui, pois a página agora faz isso dinamicamente.
-    // O endpoint fica mais simples e só precisa enviar a lista de 'requests'.
     return NextResponse.json({
       ok: true,
       requests,

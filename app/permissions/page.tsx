@@ -21,7 +21,7 @@ export default async function PermissionsPage() {
 
   return (
     <main className="min-h-screen bg-white p-6">
-      <div className="max-w-3xl">
+      <div className="max-w-full">
         <Link href="/home" className="text-slate-600 hover:text-slate-900">
           ← Voltar
         </Link>
@@ -31,7 +31,7 @@ export default async function PermissionsPage() {
           Solicite acesso para editar um plano específico do CAPEX.
         </p>
 
-        <div className="mt-6">
+        <div className="mt-8">
           <PermissionRequestForm />
         </div>
       </div>
