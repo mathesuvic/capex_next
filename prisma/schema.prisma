@@ -1,4 +1,5 @@
 // prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -127,6 +128,20 @@ model User {
 
   @@map("user")
 }
+
+// --- MODELO AJUSTADO ---
+model Subplan {
+  plano_investimento String  @id
+  tipo               String?
+  natureza           String?
+  plano_text         String?
+  id                 String? // Esta coluna 'id' da imagem parece um ID secundário
+  plano              String?
+
+  // AQUI ESTÁ A CORREÇÃO:
+  @@map("planos_desc")
+}
+// --- FIM DO MODELO ---
 
 enum StatusSolicitacao {
   pendente
