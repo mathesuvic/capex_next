@@ -1,4 +1,5 @@
 // app/admin/permissions/page.tsx
+
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { verifyToken, AUTH_COOKIE } from "@/lib/jwt";
@@ -20,7 +21,8 @@ export default async function AdminPermissionsPage() {
 
   return (
     <main className="min-h-screen bg-white p-6">
-      <div className="max-w-4xl">
+      {/* ESTE DIV CONTÉM A CLASSE QUE LIMITA A LARGURA */}
+      <div className="max-w-4xl mx-auto">
         <h1 className="text-2xl font-bold">Aprovar solicitações</h1>
         <p className="mt-2 text-slate-600">Somente administradores.</p>
         <div className="mt-6">

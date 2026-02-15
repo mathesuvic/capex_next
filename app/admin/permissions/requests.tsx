@@ -1,14 +1,16 @@
-//app/admin/permissions/requests.tsx
+// app/admin/permissions/requests.tsx
+
 "use client";
 
 import { useEffect, useState } from "react";
 
+// --- CORREÇÃO 1: O objeto se chama 'requester', não 'user' ---
 type ReqItem = {
   id: string;
   capexLabel: string;
   reason: string | null;
   createdAt: string;
-  user: {
+  requester: {
     email: string;
     name: string | null;
   };
@@ -24,7 +26,8 @@ export default function AdminPermissionRequests() {
     setLoading(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/admin/permissions/requests", {
+      // --- CORREÇÃO 2: A URL da API não tem '/admin' no meio ---
+      const res = await fetch("/api/permissions/requests", {
         credentials: "include",
       });
 
@@ -54,7 +57,8 @@ export default function AdminPermissionRequests() {
     try {
       const apiStatus = action === "approve" ? "APPROVED" : "REJECTED";
 
-      const res = await fetch(`/api/admin/permissions/requests/${id}`, {
+      // Assumindo que a API de PATCH também não tem /admin no meio
+      const res = await fetch(`/api/permissions/requests/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: apiStatus }),
@@ -87,8 +91,11 @@ export default function AdminPermissionRequests() {
         <div key={r.id} className="border rounded-lg p-4 shadow-sm bg-white">
           <div className="flex justify-between items-start">
             <div>
-              <p className="font-medium">{r.user?.email || "Usuário desconhecido"}</p>
-              <p className="text-sm text-gray-700">
+              {/* --- CORREÇÃO 3: Usar 'requester.name' e 'requester.email' --- */}
+              <p className="font-bold text-lg">{r.requester?.name || "Nome não encontrado"}</p>
+              <p className="text-sm text-gray-500">{r.requester?.email || "Email desconhecido"}</p>
+              
+              <p className="text-sm text-gray-700 mt-2">
                 Solicitou: <span className="font-semibold">{r.capexLabel}</span>
               </p>
               {r.reason && (
