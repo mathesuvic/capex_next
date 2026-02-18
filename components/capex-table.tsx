@@ -3,8 +3,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
-
-// expansão >> Importando um ícone de seta para usar como indicador
 import { ChevronDown } from "lucide-react";
 
 interface CellData {
@@ -102,7 +100,6 @@ const fallbackData: RowData[] = [
   },
 ];
 
-// ... (todas as suas funções helper como calculateTotal, formatNumber, etc, continuam aqui, sem alterações)
 function calculateTotal(rowCells: CellData[]) {
   return rowCells.reduce((sum, c) => sum + (typeof c.value === "number" ? c.value : 0), 0);
 }
@@ -220,8 +217,6 @@ export function CapexTable() {
   const [savingState, setSavingState] = useState<{ [rowIndex: number]: boolean }>({});
   const [isLoading, setIsLoading] = useState(true);
   
-  // expansão >> 1. Adicionando o estado para controlar os planos expandidos
-  // Começa com todos os planos expandidos por padrão para uma melhor visualização inicial
   const [expandedPlans, setExpandedPlans] = useState<Set<string>>(() => new Set(fallbackData.filter(r => r.sublevel === undefined).map(r => r.label)));
 
   useEffect(() => {
@@ -233,7 +228,6 @@ export function CapexTable() {
         if (!res.ok) throw new Error("Falha ao buscar /api/capex");
         const json = (await res.json()) as RowData[];
         setData(json);
-        // expansão >> Inicia o estado de expansão com todos os planos dos dados recebidos
         setExpandedPlans(new Set(json.filter(r => r.sublevel === undefined).map(r => r.label)));
       } catch (e) {
         if ((e as any)?.name === "AbortError") return;
@@ -275,7 +269,6 @@ export function CapexTable() {
   const incomingIndex = buildIncomingIndex(data);
   const displayData = computeDisplay(data, editableMonths);
 
-  // expansão >> 2. Função para adicionar/remover um plano do Set de expandidos
   const togglePlanExpansion = (planLabel: string) => {
     setExpandedPlans(prev => {
       const next = new Set(prev);
@@ -288,18 +281,26 @@ export function CapexTable() {
     });
   };
 
-  // expansão >> 3. Memoizando as linhas visíveis com base nos planos expandidos
+  // expandir/recolher todos >> 1. Funções para abrir e fechar todos os grupos
+  const expandAll = () => {
+    const allPlanLabels = new Set(data.filter(r => r.sublevel === undefined).map(r => r.label));
+    setExpandedPlans(allPlanLabels);
+  };
+
+  const collapseAll = () => {
+    setExpandedPlans(new Set());
+  };
+
   const visibleRows = useMemo(() => {
     if (isLoading) return [];
     const rows: RowData[] = [];
     let currentPlanLabel: string | null = null;
 
     for (const row of displayData) {
-      if (row.sublevel === undefined) { // É uma linha de Plano
+      if (row.sublevel === undefined) {
         currentPlanLabel = row.label;
         rows.push(row);
-      } else if (row.sublevel === 1) { // É uma linha de Subplano
-        // Adiciona o subplano somente se o plano pai estiver na lista de expandidos
+      } else if (row.sublevel === 1) {
         if (currentPlanLabel && expandedPlans.has(currentPlanLabel)) {
           rows.push(row);
         }
@@ -314,7 +315,6 @@ export function CapexTable() {
     return allowedLabels.has(normalizeLabel(row.label));
   };
 
-  // ... (todas as suas funções de handle... e save... continuam aqui, sem alterações)
   const handleCellChange = async (row: RowData, rowIndex: number, cellIndex: number, value: string) => {
     const numValue = value === "" ? 0 : Number.parseFloat(value) || 0;
     if (!canEditRowLabel(row)) return;
@@ -424,7 +424,12 @@ export function CapexTable() {
     <Card className="overflow-hidden border border-slate-200 shadow-lg">
       <div className="flex items-center justify-between px-4 py-3 border-b bg-white">
         <h3 className="text-sm font-semibold text-slate-800">CAPEX (R$ Mil)</h3>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
+          {/* expandir/recolher todos >> 2. Adicionando os botões na interface */}
+          <div className="flex items-center gap-2">
+             <button onClick={expandAll} className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded px-3 py-1.5 border border-slate-300">Abrir Todos</button>
+             <button onClick={collapseAll} className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded px-3 py-1.5 border border-slate-300">Fechar Todos</button>
+          </div>
           <div className="flex items-center gap-1">
             <span className="text-xs text-slate-600 mr-2">Meses editáveis:</span>
             {MONTHS.map((m, idx) => (
@@ -452,9 +457,7 @@ export function CapexTable() {
               </tr>
             </thead>
             <tbody>
-              {/* expansão >> 4. Mapeando as 'visibleRows' em vez de 'displayData' */}
               {visibleRows.map((row) => {
-                // expansão >> Encontrando o rowIndex original para manter a lógica de edição/transferência
                 const rowIndex = data.findIndex(d => d.label === row.label);
                 
                 const total = calculateTotal(row.cells);
@@ -471,11 +474,10 @@ export function CapexTable() {
                 return (
                   <tr key={row.label} className={`${row.color || (isSubLevel ? "bg-white" : "bg-slate-50")} border-b border-slate-200 hover:bg-slate-50 transition-colors`}>
                     <td className={`sticky left-0 z-10 border border-slate-200 px-4 py-3 font-medium ${row.color || (isSubLevel ? "bg-white" : "bg-slate-50")} ${isSubLevel ? "pl-8 text-slate-700" : "text-slate-900"}`}>
-                      {/* expansão >> 5. Adicionando o botão e o ícone para expandir/recolher */}
                       <div className="flex items-center gap-2">
                         {isPlano && (
-                          <button onClick={() => togglePlanExpansion(row.label)} className="p-1 -ml-1">
-                            <ChevronDown size={16} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          <button onClick={() => togglePlanExpansion(row.label)} className="p-1 -ml-1 rounded-full hover:bg-slate-200">
+                            <ChevronDown size={16} className={`transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
                           </button>
                         )}
                         <span>{row.label}</span>
@@ -552,7 +554,6 @@ export function CapexTable() {
           </table>
         </div>
       )}
-      {/* O resto do seu componente (legendas, modal de mapa) continua aqui, sem alterações */}
       <div className="bg-slate-50 border-t border-slate-200 px-6 py-4 space-y-2">
         <p className="text-sm text-slate-600"><span className="inline-block w-3 h-3 bg-[#e6f0ff] border border-[#0066CC] rounded mr-2"></span>Valores em <strong>azul</strong> são dados de meses não-editáveis (imutáveis no front)</p>
         <p className="text-sm text-slate-600"><span className="inline-block w-3 h-3 bg-[#e6f7f0] border border-[#00823B] rounded mr-2"></span>Valores em <strong>verde</strong> são meses marcados como <strong>editáveis/previstos</strong> (você pode selecionar quais meses acima)</p>
