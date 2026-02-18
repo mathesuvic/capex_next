@@ -4,13 +4,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 
+// expansão >> Importando um ícone de seta para usar como indicador
+import { ChevronDown } from "lucide-react";
+
 interface CellData {
   value: number | string;
   type: "realizado" | "previsto";
 }
 
 interface TransferEntry {
-  id?: number | string; // ID pode ser string (temp) ou number (do DB)
+  id?: number | string;
   amount: number;
   to?: string;
   toId?: number;
@@ -36,7 +39,6 @@ const parseEnvEditableMonths = () =>
     .map((s) => parseInt(s.trim(), 10) - 1)
     .filter((m) => Number.isFinite(m) && m >= 0 && m < 12);
 
-// Usando o fallbackData completo que você forneceu originalmente
 const fallbackData: RowData[] = [
   {
     label: "Plano 1 - Expansão de Rede",
@@ -100,6 +102,7 @@ const fallbackData: RowData[] = [
   },
 ];
 
+// ... (todas as suas funções helper como calculateTotal, formatNumber, etc, continuam aqui, sem alterações)
 function calculateTotal(rowCells: CellData[]) {
   return rowCells.reduce((sum, c) => sum + (typeof c.value === "number" ? c.value : 0), 0);
 }
@@ -202,6 +205,7 @@ function heatClass(v: number, max: number) {
   return "bg-emerald-50";
 }
 
+
 type PermissionsResponse = | { isAdmin: true; allowedLabels: "ALL" } | { isAdmin: false; allowedLabels: string[] };
 
 export function CapexTable() {
@@ -215,6 +219,10 @@ export function CapexTable() {
   const [allowedLabels, setAllowedLabels] = useState<Set<string>>(() => new Set());
   const [savingState, setSavingState] = useState<{ [rowIndex: number]: boolean }>({});
   const [isLoading, setIsLoading] = useState(true);
+  
+  // expansão >> 1. Adicionando o estado para controlar os planos expandidos
+  // Começa com todos os planos expandidos por padrão para uma melhor visualização inicial
+  const [expandedPlans, setExpandedPlans] = useState<Set<string>>(() => new Set(fallbackData.filter(r => r.sublevel === undefined).map(r => r.label)));
 
   useEffect(() => {
     const controller = new AbortController();
@@ -225,6 +233,8 @@ export function CapexTable() {
         if (!res.ok) throw new Error("Falha ao buscar /api/capex");
         const json = (await res.json()) as RowData[];
         setData(json);
+        // expansão >> Inicia o estado de expansão com todos os planos dos dados recebidos
+        setExpandedPlans(new Set(json.filter(r => r.sublevel === undefined).map(r => r.label)));
       } catch (e) {
         if ((e as any)?.name === "AbortError") return;
         console.error(e);
@@ -265,20 +275,46 @@ export function CapexTable() {
   const incomingIndex = buildIncomingIndex(data);
   const displayData = computeDisplay(data, editableMonths);
 
-  const toggleEditableMonth = (idx: number) => {
-    setEditableMonths((prev) => {
+  // expansão >> 2. Função para adicionar/remover um plano do Set de expandidos
+  const togglePlanExpansion = (planLabel: string) => {
+    setExpandedPlans(prev => {
       const next = new Set(prev);
-      if (next.has(idx)) next.delete(idx);
-      else next.add(idx);
+      if (next.has(planLabel)) {
+        next.delete(planLabel);
+      } else {
+        next.add(planLabel);
+      }
       return next;
     });
   };
+
+  // expansão >> 3. Memoizando as linhas visíveis com base nos planos expandidos
+  const visibleRows = useMemo(() => {
+    if (isLoading) return [];
+    const rows: RowData[] = [];
+    let currentPlanLabel: string | null = null;
+
+    for (const row of displayData) {
+      if (row.sublevel === undefined) { // É uma linha de Plano
+        currentPlanLabel = row.label;
+        rows.push(row);
+      } else if (row.sublevel === 1) { // É uma linha de Subplano
+        // Adiciona o subplano somente se o plano pai estiver na lista de expandidos
+        if (currentPlanLabel && expandedPlans.has(currentPlanLabel)) {
+          rows.push(row);
+        }
+      }
+    }
+    return rows;
+  }, [displayData, expandedPlans, isLoading]);
+
 
   const canEditRowLabel = (row: RowData) => {
     if (isAdmin) return true;
     return allowedLabels.has(normalizeLabel(row.label));
   };
 
+  // ... (todas as suas funções de handle... e save... continuam aqui, sem alterações)
   const handleCellChange = async (row: RowData, rowIndex: number, cellIndex: number, value: string) => {
     const numValue = value === "" ? 0 : Number.parseFloat(value) || 0;
     if (!canEditRowLabel(row)) return;
@@ -416,20 +452,34 @@ export function CapexTable() {
               </tr>
             </thead>
             <tbody>
-              {displayData.map((row, rowIndex) => {
+              {/* expansão >> 4. Mapeando as 'visibleRows' em vez de 'displayData' */}
+              {visibleRows.map((row) => {
+                // expansão >> Encontrando o rowIndex original para manter a lógica de edição/transferência
+                const rowIndex = data.findIndex(d => d.label === row.label);
+                
                 const total = calculateTotal(row.cells);
                 const isSubLevel = row.sublevel === 1;
                 const isPlano = row.sublevel === undefined;
                 const net = row.transferNet ?? 0;
                 const metaVal = row.meta ?? 0;
                 const saldo = metaVal - total + net;
-                const incomingList = incomingIndex[row.label] ?? [];
+                const incomingList = isSubLevel ? (incomingIndex[row.label] ?? []) : [];
                 const canEditRow = isSubLevel && canEditRowLabel(row);
-                const isSaving = savingState[rowIndex] === true;
+                const isSaving = rowIndex !== -1 ? savingState[rowIndex] === true : false;
+                const isExpanded = isPlano && expandedPlans.has(row.label);
+
                 return (
-                  <tr key={rowIndex} className={`${row.color || (isSubLevel ? "bg-white" : "bg-slate-50")} border-b border-slate-200 hover:bg-slate-50 transition-colors`}>
+                  <tr key={row.label} className={`${row.color || (isSubLevel ? "bg-white" : "bg-slate-50")} border-b border-slate-200 hover:bg-slate-50 transition-colors`}>
                     <td className={`sticky left-0 z-10 border border-slate-200 px-4 py-3 font-medium ${row.color || (isSubLevel ? "bg-white" : "bg-slate-50")} ${isSubLevel ? "pl-8 text-slate-700" : "text-slate-900"}`}>
-                      {row.label}
+                      {/* expansão >> 5. Adicionando o botão e o ícone para expandir/recolher */}
+                      <div className="flex items-center gap-2">
+                        {isPlano && (
+                          <button onClick={() => togglePlanExpansion(row.label)} className="p-1 -ml-1">
+                            <ChevronDown size={16} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          </button>
+                        )}
+                        <span>{row.label}</span>
+                      </div>
                       {isSubLevel && !canEditRow && (<div className="mt-1 text-[11px] text-slate-500">Sem permissão para editar esta linha</div>)}
                     </td>
                     {row.cells.map((cell, cellIndex) => {
@@ -449,8 +499,8 @@ export function CapexTable() {
                     <td className="border border-slate-200 px-3 py-3 text-center bg-indigo-50 min-w-56">
                       <div className="flex flex-col items-center justify-center gap-1">
                         <span className={`text-sm font-bold ${net > 0 ? "text-emerald-700" : net < 0 ? "text-red-700" : "text-slate-900"}`}>{formatSigned(net)}</span>
-                        {isSubLevel && (<span className="text-[11px] text-slate-600">Entradas: <span className="text-emerald-700 font-medium">+{incomingList.length}</span> | Saídas: <span className="text-red-700 font-medium">{(data[rowIndex]?.transfers ?? []).length}</span></span>)}
-                        {isSubLevel && (
+                        {isSubLevel && (<span className="text-[11px] text-slate-600">Entradas: <span className="text-emerald-700 font-medium">+{incomingList.length}</span> | Saídas: <span className="text-red-700 font-medium">{rowIndex !== -1 ? (data[rowIndex]?.transfers ?? []).length : 0}</span></span>)}
+                        {isSubLevel && rowIndex !== -1 && (
                           <details className="relative mt-1">
                             <summary className="cursor-pointer text-xs text-indigo-700 underline decoration-dotted select-none">detalhes</summary>
                             <div className="absolute right-0 mt-2 w-[520px] bg-white border border-slate-200 rounded shadow p-3 z-30 text-left">
@@ -502,6 +552,7 @@ export function CapexTable() {
           </table>
         </div>
       )}
+      {/* O resto do seu componente (legendas, modal de mapa) continua aqui, sem alterações */}
       <div className="bg-slate-50 border-t border-slate-200 px-6 py-4 space-y-2">
         <p className="text-sm text-slate-600"><span className="inline-block w-3 h-3 bg-[#e6f0ff] border border-[#0066CC] rounded mr-2"></span>Valores em <strong>azul</strong> são dados de meses não-editáveis (imutáveis no front)</p>
         <p className="text-sm text-slate-600"><span className="inline-block w-3 h-3 bg-[#e6f7f0] border border-[#00823B] rounded mr-2"></span>Valores em <strong>verde</strong> são meses marcados como <strong>editáveis/previstos</strong> (você pode selecionar quais meses acima)</p>
