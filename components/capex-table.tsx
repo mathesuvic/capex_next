@@ -3,13 +3,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { ChevronDown, CheckCircle2 } from "lucide-react"; // Adicionado ícone de check
+import { ChevronDown, CheckCircle2, AlertCircle, CircleDot } from "lucide-react"; // Ícones adicionados
 
-// >>> ALTERAÇÃO 1: Atualizando a interface para incluir os novos campos <<<
+// >>> ALTERAÇÃO 1: Adicionando o status 'PARCIAL' à interface <<<
+type CapexStatus = 'PENDENTE' | 'FINALIZADO' | 'PARCIAL';
+
 interface RowData {
-  id: number | string; // id agora é obrigatório
+  id: number | string;
   label: string;
-  capex: string; // Adicionado para ser o ID único e consistente
+  capex: string;
   sublevel?: number;
   color?: string;
   cells: CellData[];
@@ -17,7 +19,7 @@ interface RowData {
   meta?: number;
   transfers?: TransferEntry[];
   transferNet?: number;
-  status_capex?: 'PENDENTE' | 'FINALIZADO'; // Adicionado o campo de status
+  status_capex?: CapexStatus; // Usando o novo tipo
 }
 
 interface CellData {
@@ -40,7 +42,6 @@ const parseEnvEditableMonths = () =>
     .map((s) => parseInt(s.trim(), 10) - 1)
     .filter((m) => Number.isFinite(m) && m >= 0 && m < 12);
 
-// As funções helper (calculateTotal, formatNumber, etc) continuam as mesmas
 function calculateTotal(rowCells: CellData[]) {
   return rowCells.reduce((sum, c) => sum + (typeof c.value === "number" ? c.value : 0), 0);
 }
@@ -50,6 +51,7 @@ function normalizeLabel(input: string) {
   return (input ?? "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 const sumOutgoing = (row: RowData) => (row.transfers ?? []).reduce((s, t) => s + (Number.isFinite(t.amount) ? t.amount : 0), 0);
+
 function buildIncomingIndex(rows: RowData[]) {
   const sublabels = new Set(rows.filter((r) => r.sublevel === 1).map((r) => r.label));
   const temp: Record<string, Record<string, number>> = {};
@@ -67,6 +69,8 @@ function buildIncomingIndex(rows: RowData[]) {
   });
   return result;
 }
+
+// >>> ALTERAÇÃO 2: Lógica de cálculo do status do grupo foi adicionada aqui <<<
 function computeDisplay(rows: RowData[], editableMonths: Set<number>) {
   const res = rows.map((r) => ({ ...r, cells: r.cells.map((c) => ({ ...c })) }));
   const subIndex = new Map<string, number>();
@@ -89,6 +93,7 @@ function computeDisplay(rows: RowData[], editableMonths: Set<number>) {
       const monthIsPrevisto = Array(12).fill(false) as boolean[];
       let metaSum = 0;
       let netSum = 0;
+      const childrenStatuses: CapexStatus[] = [];
       let j = i + 1;
       while (j < res.length && res[j].sublevel === 1) {
         res[j].cells.forEach((cell, idx) => {
@@ -98,10 +103,23 @@ function computeDisplay(rows: RowData[], editableMonths: Set<number>) {
         metaSum += res[j].meta ?? 0;
         netSum += net[j];
         res[j] = { ...res[j], transferNet: net[j] };
+        if (res[j].status_capex) {
+          childrenStatuses.push(res[j].status_capex!);
+        }
         j++;
       }
+
+      let parentStatus: CapexStatus = 'PENDENTE';
+      if (childrenStatuses.length > 0) {
+        if (childrenStatuses.every(s => s === 'FINALIZADO')) {
+          parentStatus = 'FINALIZADO';
+        } else if (childrenStatuses.some(s => s === 'FINALIZADO')) {
+          parentStatus = 'PARCIAL';
+        }
+      }
+
       for (let mi = 0; mi < 12; mi++) { if (editableMonths.has(mi)) monthIsPrevisto[mi] = true; }
-      res[i] = { ...row, computed: true, meta: metaSum, transferNet: netSum, cells: agg.map((v, idx) => ({ value: v, type: monthIsPrevisto[idx] ? ("previsto" as const) : ("realizado" as const), })) };
+      res[i] = { ...row, computed: true, meta: metaSum, transferNet: netSum, status_capex: parentStatus, cells: agg.map((v, idx) => ({ value: v, type: monthIsPrevisto[idx] ? ("previsto" as const) : ("realizado" as const), })) };
       i = j;
     } else {
       res[i] = { ...res[i], cells: res[i].cells.map((c, idx) => ({ value: c.value, type: editableMonths.has(idx) ? "previsto" : c.type, })) };
@@ -110,6 +128,7 @@ function computeDisplay(rows: RowData[], editableMonths: Set<number>) {
   }
   return res;
 }
+
 function buildTransferMatrix(rows: RowData[]) {
   const labels = rows.filter((r) => r.sublevel === 1).map((r) => r.label);
   const idxMap = new Map(labels.map((l, i) => [l, i] as const));
@@ -207,7 +226,7 @@ export function CapexTable() {
   const subplans = useMemo(() => data.filter((r) => r.sublevel === 1).map((r) => ({ label: r.label, id: r.id })), [data]);
   const sublevelOptions = subplans.map((s) => s.label);
   const incomingIndex = buildIncomingIndex(data);
-  const displayData = computeDisplay(data, editableMonths);
+  const displayData = useMemo(() => computeDisplay(data, editableMonths), [data, editableMonths]);
 
   const togglePlanExpansion = (planLabel: string) => {
     setExpandedPlans(prev => {
@@ -281,8 +300,9 @@ export function CapexTable() {
     if (!canEditRowLabel(row)) return;
     setData((prev) => {
       const copy = structuredClone(prev) as RowData[];
-      if (!copy[rowIndex]) return prev;
-      copy[rowIndex].cells[cellIndex].value = numValue;
+      const originalRowIndex = copy.findIndex(r => r.capex === row.capex);
+      if (originalRowIndex === -1) return prev;
+      copy[originalRowIndex].cells[cellIndex].value = numValue;
       return copy;
     });
     if (row.sublevel === 1 && editableMonths.has(cellIndex)) {
@@ -461,8 +481,8 @@ export function CapexTable() {
                     <td className="border border-slate-200 px-3 py-3 text-center bg-indigo-50 min-w-56">
                       <div className="flex flex-col items-center justify-center gap-1">
                         <span className={`text-sm font-bold ${net > 0 ? "text-emerald-700" : net < 0 ? "text-red-700" : "text-slate-900"}`}>{formatSigned(net)}</span>
-                        {isSubLevel && (<span className="text-[11px] text-slate-600">Entradas: <span className="text-emerald-700 font-medium">+{incomingList.length}</span> | Saídas: <span className="text-red-700 font-medium">{rowIndex !== -1 ? (data[rowIndex]?.transfers ?? []).length : 0}</span></span>)}
-                        {isSubLevel && rowIndex !== -1 && (
+                        {isSubLevel && (<span className="text-[11px] text-slate-600">Entradas: <span className="text-emerald-700 font-medium">+{incomingList.length}</span> | Saídas: <span className="text-red-700 font-medium">{rowIndex !== -1 && data[rowIndex] ? (data[rowIndex].transfers ?? []).length : 0}</span></span>)}
+                        {isSubLevel && rowIndex !== -1 && data[rowIndex] && (
                           <details className="relative mt-1">
                             <summary className="cursor-pointer text-xs text-indigo-700 underline decoration-dotted select-none">detalhes</summary>
                             <div className="absolute right-0 mt-2 w-[520px] bg-white border border-slate-200 rounded shadow p-3 z-30 text-left">
@@ -475,14 +495,14 @@ export function CapexTable() {
                                   <h4 className="text-xs font-semibold text-red-700 mb-2">Saídas</h4>
                                   {!canEditRow && (<p className="text-xs text-slate-500 mb-2">Você não tem permissão para editar saídas desta linha.</p>)}
                                   <div className="max-h-56 overflow-auto space-y-2">
-                                    {(data[rowIndex]?.transfers ?? []).map((t) => (
+                                    {(data[rowIndex].transfers ?? []).map((t) => (
                                       <div key={t.id} className="grid grid-cols-12 gap-2 items-end">
                                         <div className="col-span-5"><label className="text-[11px] text-slate-500">Valor (saída)</label><input type="number" value={t.amount === 0 ? "" : t.amount} onChange={(e) => updateTransferAmount(rowIndex, t.id!, e.target.value)} className="w-full border border-slate-300 rounded px-2 py-1 text-sm disabled:bg-slate-100" placeholder="0" disabled={!canEditRow || isSaving}/></div>
                                         <div className="col-span-6"><label className="text-[11px] text-slate-500">Destino (subplano)</label><select value={t.to ?? ""} onChange={(e) => updateTransferTarget(rowIndex, t.id!, e.target.value)} className="w-full border border-slate-300 rounded px-2 py-1 text-sm bg-white disabled:bg-slate-100" disabled={!canEditRow || isSaving}><option value="" disabled>Selecione</option>{sublevelOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}</select></div>
                                         <div className="col-span-1"><button onClick={() => removeTransfer(rowIndex, t.id!)} className="text-xs text-red-600 hover:underline disabled:opacity-50" disabled={!canEditRow || isSaving}>x</button></div>
                                       </div>
                                     ))}
-                                    {(!data[rowIndex]?.transfers || data[rowIndex]!.transfers!.length === 0) && (<p className="text-xs text-slate-500">Sem saídas.</p>)}
+                                    {(!data[rowIndex].transfers || data[rowIndex]!.transfers!.length === 0) && (<p className="text-xs text-slate-500">Sem saídas.</p>)}
                                   </div>
                                   <div className="mt-4 pt-2 border-t flex items-center justify-between">
                                     <button onClick={() => addTransfer(rowIndex)} className="bg-slate-200 text-slate-800 text-xs rounded px-2 py-1 hover:bg-slate-300 disabled:opacity-50" disabled={!canEditRow || isSaving}>Adicionar saída</button>
@@ -515,6 +535,28 @@ export function CapexTable() {
                             >
                               Finalizar
                             </button>
+                          )}
+                        </>
+                      )}
+                      {isPlano && (
+                        <>
+                          {row.status_capex === 'FINALIZADO' && (
+                            <span className="flex items-center justify-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-full">
+                              <CheckCircle2 size={14} />
+                              Finalizado
+                            </span>
+                          )}
+                          {row.status_capex === 'PARCIAL' && (
+                            <span className="flex items-center justify-center gap-2 text-xs font-semibold text-yellow-800 bg-yellow-100 px-3 py-1.5 rounded-full">
+                              <AlertCircle size={14} />
+                              Parcial
+                            </span>
+                          )}
+                          {row.status_capex === 'PENDENTE' && (
+                            <span className="flex items-center justify-center gap-2 text-xs font-semibold text-slate-600 bg-slate-200 px-3 py-1.5 rounded-full">
+                              <CircleDot size={14} />
+                              Pendente
+                            </span>
                           )}
                         </>
                       )}
