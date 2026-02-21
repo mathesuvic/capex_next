@@ -1,30 +1,25 @@
 ﻿// app/api/capex/route.ts
 
-import { NextResponse, type NextRequest } from "next/server"; // Importe o NextRequest
+import { NextResponse, type NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 
 export const runtime = "nodejs";
 // opcional para evitar cache em dev:
 // export const revalidate = 0;
 
-export async function GET(req: NextRequest) { // Adicione o 'req: NextRequest'
+export async function GET(req: NextRequest) {
   try {
-    // --- LÓGICA DO FILTRO ADICIONADA AQUI ---
     const url = new URL(req.url);
     const purpose = url.searchParams.get("purpose");
 
-    const whereClause: { plano?: string } = {}; // Objeto para o filtro do Prisma
+    const whereClause: { plano?: string } = {};
 
-    // Se a URL contiver "?purpose=dropdown", adicionamos a condição ao filtro
     if (purpose === "dropdown") {
       whereClause.plano = "subplano";
     }
-    // --- FIM DA LÓGICA DO FILTRO ---
-
 
     const [capexItems, allTransfers] = await Promise.all([
       prisma.capexWeb.findMany({
-        // Adicionamos a cláusula 'where' na consulta
         where: whereClause,
         orderBy: [{ ordem: "asc" }],
       }),
@@ -38,7 +33,6 @@ export async function GET(req: NextRequest) { // Adicione o 'req: NextRequest'
 
     const toNum = (v: unknown) => (v == null ? 0 : Number(v));
 
-    // Indexa transferências por capex de origem
     const transfersByFrom = new Map<
       string,
       Array<{ id: number; amount: number; to: string }>
@@ -70,18 +64,25 @@ export async function GET(req: NextRequest) { // Adicione o 'req: NextRequest'
       const isPlano = row.plano === "plano";
 
       const cells = monthMapping.map((key, idx) => ({
+        // A sua lógica de 'realizado' vs 'previsto' parece estar baseada no índice do mês.
+        // Se precisar que seja baseada no status, teríamos que ajustar aqui. Por ora, mantive.
         type: idx < 10 ? "realizado" : "previsto",
         value: toNum((row as any)[key]),
       }));
 
       return {
-        id: row.capex, // PK é o próprio label
+        // As linhas de 'id' e 'label' foram renomeadas para mais clareza no frontend.
+        id: row.capex,
         label: row.capex,
+        // >>> CORREÇÃO 1: Adicionando o campo 'capex' para ser usado como ID único.
+        capex: row.capex,
         sublevel: isSubLevel ? 1 : undefined,
         color: isPlano ? planoColors[planoCount++ % planoColors.length] : undefined,
         cells,
         meta: toNum((row as any).meta),
         transfers: transfersByFrom.get(row.capex) ?? [],
+        // >>> CORREÇÃO 2: Adicionando o campo 'status_capex' à resposta da API.
+        status_capex: row.status_capex,
       };
     });
 

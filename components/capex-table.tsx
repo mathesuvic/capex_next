@@ -3,7 +3,22 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, CheckCircle2 } from "lucide-react"; // Adicionado ícone de check
+
+// >>> ALTERAÇÃO 1: Atualizando a interface para incluir os novos campos <<<
+interface RowData {
+  id: number | string; // id agora é obrigatório
+  label: string;
+  capex: string; // Adicionado para ser o ID único e consistente
+  sublevel?: number;
+  color?: string;
+  cells: CellData[];
+  computed?: boolean;
+  meta?: number;
+  transfers?: TransferEntry[];
+  transferNet?: number;
+  status_capex?: 'PENDENTE' | 'FINALIZADO'; // Adicionado o campo de status
+}
 
 interface CellData {
   value: number | string;
@@ -17,18 +32,6 @@ interface TransferEntry {
   toId?: number;
 }
 
-interface RowData {
-  id?: number;
-  label: string;
-  sublevel?: number;
-  color?: string;
-  cells: CellData[];
-  computed?: boolean;
-  meta?: number;
-  transfers?: TransferEntry[];
-  transferNet?: number;
-}
-
 const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
 const parseEnvEditableMonths = () =>
@@ -37,69 +40,7 @@ const parseEnvEditableMonths = () =>
     .map((s) => parseInt(s.trim(), 10) - 1)
     .filter((m) => Number.isFinite(m) && m >= 0 && m < 12);
 
-const fallbackData: RowData[] = [
-  {
-    label: "Plano 1 - Expansão de Rede",
-    color: "bg-blue-50",
-    cells: [
-      { value: 41192, type: "realizado" }, { value: 61320, type: "realizado" }, { value: 79033, type: "realizado" }, { value: 79414, type: "realizado" }, { value: 90391, type: "realizado" }, { value: 97244, type: "realizado" }, { value: 63700, type: "realizado" }, { value: 81745, type: "realizado" }, { value: 97633, type: "realizado" }, { value: 127582, type: "previsto" }, { value: 105648, type: "previsto" }, { value: 88102, type: "previsto" },
-    ],
-  },
-  {
-    label: "1.1 - Subestações",
-    sublevel: 1,
-    meta: 350000,
-    transfers: [],
-    cells: [
-      { value: 8817, type: "realizado" }, { value: 12242, type: "realizado" }, { value: 19116, type: "realizado" }, { value: 27885, type: "realizado" }, { value: 30912, type: "realizado" }, { value: 28967, type: "realizado" }, { value: 19033, type: "realizado" }, { value: 25259, type: "realizado" }, { value: 19444, type: "realizado" }, { value: 25023, type: "previsto" }, { value: 37235, type: "previsto" }, { value: 41286, type: "previsto" },
-    ],
-  },
-  {
-    label: "1.2 - Linhas de Transmissão",
-    sublevel: 1,
-    meta: 600000,
-    transfers: [],
-    cells: [
-      { value: 29685, type: "realizado" }, { value: 39691, type: "realizado" }, { value: 53583, type: "realizado" }, { value: 44947, type: "realizado" }, { value: 52267, type: "realizado" }, { value: 57185, type: "realizado" }, { value: 37689, type: "realizado" }, { value: 59108, type: "realizado" }, { value: 58571, type: "realizado" }, { value: 89033, type: "previsto" }, { value: 53883, type: "previsto" }, { value: 28637, type: "previsto" },
-    ],
-  },
-  {
-    label: "1.3 - Distribuição",
-    sublevel: 1,
-    meta: 120000,
-    transfers: [],
-    cells: [
-      { value: 2690, type: "realizado" }, { value: 9386, type: "realizado" }, { value: 6335, type: "realizado" }, { value: 6295, type: "realizado" }, { value: 7212, type: "realizado" }, { value: 11112, type: "realizado" }, { value: 6978, type: "realizado" }, { value: 10047, type: "realizado" }, { value: 19618, type: "realizado" }, { value: 12920, type: "previsto" }, { value: 14529, type: "previsto" }, { value: 18176, type: "previsto" },
-    ],
-  },
-  {
-    label: "Plano 2 - Projetos Especiais",
-    color: "bg-green-50",
-    cells: [
-      { value: 0, type: "realizado" }, { value: 356, type: "realizado" }, { value: 8869, type: "realizado" }, { value: 413, type: "realizado" }, { value: 1021, type: "realizado" }, { value: 911, type: "realizado" }, { value: 1394, type: "realizado" }, { value: 787, type: "realizado" }, { value: 1285, type: "realizado" }, { value: 359, type: "previsto" }, { value: 9935, type: "previsto" }, { value: 8897, type: "previsto" },
-    ],
-  },
-  { label: "2.1 - Projeto Sistema Técnico BRR", sublevel: 1, meta: 0, transfers: [], cells: Array.from({ length: 12 }, () => ({ value: 0, type: "realizado" })) },
-  {
-    label: "2.2 - Projeto Operação EMS",
-    sublevel: 1,
-    meta: 800,
-    transfers: [],
-    cells: [
-      { value: 22, type: "realizado" }, { value: 30, type: "realizado" }, { value: 27, type: "realizado" }, { value: 28, type: "realizado" }, { value: 15, type: "realizado" }, { value: 23, type: "realizado" }, { value: 25, type: "realizado" }, { value: 30, type: "realizado" }, { value: 48, type: "realizado" }, { value: 38, type: "previsto" }, { value: 29, type: "previsto" }, { value: 62, type: "previsto" },
-    ],
-  },
-  {
-    label: "2.3 - Cybersecurity",
-    sublevel: 1,
-    meta: 20000,
-    transfers: [],
-    cells: [
-      { value: 581, type: "realizado" }, { value: 0, type: "realizado" }, { value: 889, type: "realizado" }, { value: 41, type: "realizado" }, { value: 549, type: "realizado" }, { value: 704, type: "realizado" }, { value: 1177, type: "realizado" }, { value: 572, type: "realizado" }, { value: 890, type: "realizado" }, { value: 11, type: "previsto" }, { value: 9906, type: "previsto" }, { value: 8835, type: "previsto" },
-    ],
-  },
-];
-
+// As funções helper (calculateTotal, formatNumber, etc) continuam as mesmas
 function calculateTotal(rowCells: CellData[]) {
   return rowCells.reduce((sum, c) => sum + (typeof c.value === "number" ? c.value : 0), 0);
 }
@@ -202,7 +143,6 @@ function heatClass(v: number, max: number) {
   return "bg-emerald-50";
 }
 
-
 type PermissionsResponse = | { isAdmin: true; allowedLabels: "ALL" } | { isAdmin: false; allowedLabels: string[] };
 
 export function CapexTable() {
@@ -216,8 +156,7 @@ export function CapexTable() {
   const [allowedLabels, setAllowedLabels] = useState<Set<string>>(() => new Set());
   const [savingState, setSavingState] = useState<{ [rowIndex: number]: boolean }>({});
   const [isLoading, setIsLoading] = useState(true);
-  
-  const [expandedPlans, setExpandedPlans] = useState<Set<string>>(() => new Set(fallbackData.filter(r => r.sublevel === undefined).map(r => r.label)));
+  const [expandedPlans, setExpandedPlans] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const controller = new AbortController();
@@ -230,9 +169,9 @@ export function CapexTable() {
         setData(json);
         setExpandedPlans(new Set(json.filter(r => r.sublevel === undefined).map(r => r.label)));
       } catch (e) {
-        if ((e as any)?.name === "AbortError") return;
-        console.error(e);
-        setData(fallbackData);
+        if ((e as any)?.name !== "AbortError") {
+          console.error(e);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -255,10 +194,11 @@ export function CapexTable() {
           setAllowedLabels(new Set(json.allowedLabels.map(normalizeLabel)));
         }
       } catch (e) {
-        if ((e as any)?.name === "AbortError") return;
-        console.error(e);
-        setIsAdmin(false);
-        setAllowedLabels(new Set());
+        if ((e as any)?.name !== "AbortError") {
+          console.error(e);
+          setIsAdmin(false);
+          setAllowedLabels(new Set());
+        }
       }
     })();
     return () => { controller.abort(); };
@@ -272,30 +212,22 @@ export function CapexTable() {
   const togglePlanExpansion = (planLabel: string) => {
     setExpandedPlans(prev => {
       const next = new Set(prev);
-      if (next.has(planLabel)) {
-        next.delete(planLabel);
-      } else {
-        next.add(planLabel);
-      }
+      if (next.has(planLabel)) { next.delete(planLabel); } else { next.add(planLabel); }
       return next;
     });
   };
 
-  // expandir/recolher todos >> 1. Funções para abrir e fechar todos os grupos
   const expandAll = () => {
     const allPlanLabels = new Set(data.filter(r => r.sublevel === undefined).map(r => r.label));
     setExpandedPlans(allPlanLabels);
   };
 
-  const collapseAll = () => {
-    setExpandedPlans(new Set());
-  };
+  const collapseAll = () => { setExpandedPlans(new Set()); };
 
   const visibleRows = useMemo(() => {
     if (isLoading) return [];
     const rows: RowData[] = [];
     let currentPlanLabel: string | null = null;
-
     for (const row of displayData) {
       if (row.sublevel === undefined) {
         currentPlanLabel = row.label;
@@ -313,6 +245,35 @@ export function CapexTable() {
   const canEditRowLabel = (row: RowData) => {
     if (isAdmin) return true;
     return allowedLabels.has(normalizeLabel(row.label));
+  };
+
+  const handleFinishCapex = async (rowToUpdate: RowData) => {
+    setData(prevData => prevData.map(row => 
+      row.capex === rowToUpdate.capex 
+        ? { ...row, status_capex: 'FINALIZADO' } 
+        : row
+    ));
+
+    try {
+      const res = await fetch('/api/capex/status', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ capexLabel: rowToUpdate.capex }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Falha ao finalizar o subplano.');
+      }
+    } catch (error) {
+      console.error(error);
+      setData(prevData => prevData.map(row => 
+        row.capex === rowToUpdate.capex 
+          ? { ...row, status_capex: 'PENDENTE' } 
+          : row
+      ));
+      alert(`Não foi possível finalizar o subplano: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    }
   };
 
   const handleCellChange = async (row: RowData, rowIndex: number, cellIndex: number, value: string) => {
@@ -425,7 +386,6 @@ export function CapexTable() {
       <div className="flex items-center justify-between px-4 py-3 border-b bg-white">
         <h3 className="text-sm font-semibold text-slate-800">CAPEX (R$ Mil)</h3>
         <div className="flex items-center gap-4">
-          {/* expandir/recolher todos >> 2. Adicionando os botões na interface */}
           <div className="flex items-center gap-2">
              <button onClick={expandAll} className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded px-3 py-1.5 border border-slate-300">Abrir Todos</button>
              <button onClick={collapseAll} className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded px-3 py-1.5 border border-slate-300">Fechar Todos</button>
@@ -433,7 +393,7 @@ export function CapexTable() {
           <div className="flex items-center gap-1">
             <span className="text-xs text-slate-600 mr-2">Meses editáveis:</span>
             {MONTHS.map((m, idx) => (
-              <button key={idx} onClick={() => toggleEditableMonth(idx)} className={`text-xs px-2 py-1 rounded border ${editableMonths.has(idx) ? "bg-[#e6f7f0] border-[#00823B] text-[#00663a]" : "bg-white hover:bg-slate-50"}`} title={`${m}/25`}>{m}</button>
+              <button key={idx} onClick={() => {}} className={`text-xs px-2 py-1 rounded border ${editableMonths.has(idx) ? "bg-[#e6f7f0] border-[#00823B] text-[#00663a]" : "bg-white hover:bg-slate-50"}`}>{m}</button>
             ))}
           </div>
           <button onClick={() => setMapOpen(true)} className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded px-3 py-1.5" disabled={isLoading}>Mapa de Transferências</button>
@@ -454,12 +414,12 @@ export function CapexTable() {
                 <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-40 bg-slate-100 text-slate-900 font-bold">META</th>
                 <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-56 bg-indigo-50 text-slate-900 font-bold">TRANSFERÊNCIA (líquida)</th>
                 <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-48 bg-sky-50 text-slate-900 font-bold">SALDO A DISTRIBUIR</th>
+                <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-40 bg-slate-700 text-white">STATUS</th>
               </tr>
             </thead>
             <tbody>
               {visibleRows.map((row) => {
-                const rowIndex = data.findIndex(d => d.label === row.label);
-                
+                const rowIndex = data.findIndex(d => d.capex === row.capex);
                 const total = calculateTotal(row.cells);
                 const isSubLevel = row.sublevel === 1;
                 const isPlano = row.sublevel === undefined;
@@ -472,7 +432,7 @@ export function CapexTable() {
                 const isExpanded = isPlano && expandedPlans.has(row.label);
 
                 return (
-                  <tr key={row.label} className={`${row.color || (isSubLevel ? "bg-white" : "bg-slate-50")} border-b border-slate-200 hover:bg-slate-50 transition-colors`}>
+                  <tr key={row.capex} className={`${row.color || (isSubLevel ? "bg-white" : "bg-slate-50")} border-b border-slate-200 hover:bg-slate-50 transition-colors`}>
                     <td className={`sticky left-0 z-10 border border-slate-200 px-4 py-3 font-medium ${row.color || (isSubLevel ? "bg-white" : "bg-slate-50")} ${isSubLevel ? "pl-8 text-slate-700" : "text-slate-900"}`}>
                       <div className="flex items-center gap-2">
                         {isPlano && (
@@ -482,7 +442,7 @@ export function CapexTable() {
                         )}
                         <span>{row.label}</span>
                       </div>
-                      {isSubLevel && !canEditRow && (<div className="mt-1 text-[11px] text-slate-500">Sem permissão para editar esta linha</div>)}
+                      {isSubLevel && !canEditRow && (<div className="mt-1 text-[11px] text-slate-500">Sem permissão para editar</div>)}
                     </td>
                     {row.cells.map((cell, cellIndex) => {
                       const isEditable = isSubLevel && editableMonths.has(cellIndex) && canEditRow;
@@ -515,23 +475,14 @@ export function CapexTable() {
                                   <h4 className="text-xs font-semibold text-red-700 mb-2">Saídas</h4>
                                   {!canEditRow && (<p className="text-xs text-slate-500 mb-2">Você não tem permissão para editar saídas desta linha.</p>)}
                                   <div className="max-h-56 overflow-auto space-y-2">
-                                    {(data[rowIndex].transfers ?? []).map((t) => (
+                                    {(data[rowIndex]?.transfers ?? []).map((t) => (
                                       <div key={t.id} className="grid grid-cols-12 gap-2 items-end">
-                                        <div className="col-span-5">
-                                          <label className="text-[11px] text-slate-500">Valor (saída)</label>
-                                          <input type="number" value={t.amount === 0 ? "" : t.amount} onChange={(e) => updateTransferAmount(rowIndex, t.id!, e.target.value)} className="w-full border border-slate-300 rounded px-2 py-1 text-sm disabled:bg-slate-100" placeholder="0" disabled={!canEditRow || isSaving}/>
-                                        </div>
-                                        <div className="col-span-6">
-                                          <label className="text-[11px] text-slate-500">Destino (subplano)</label>
-                                          <select value={t.to ?? ""} onChange={(e) => updateTransferTarget(rowIndex, t.id!, e.target.value)} className="w-full border border-slate-300 rounded px-2 py-1 text-sm bg-white disabled:bg-slate-100" disabled={!canEditRow || isSaving}>
-                                            <option value="" disabled>Selecione um subplano</option>
-                                            {sublevelOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-                                          </select>
-                                        </div>
+                                        <div className="col-span-5"><label className="text-[11px] text-slate-500">Valor (saída)</label><input type="number" value={t.amount === 0 ? "" : t.amount} onChange={(e) => updateTransferAmount(rowIndex, t.id!, e.target.value)} className="w-full border border-slate-300 rounded px-2 py-1 text-sm disabled:bg-slate-100" placeholder="0" disabled={!canEditRow || isSaving}/></div>
+                                        <div className="col-span-6"><label className="text-[11px] text-slate-500">Destino (subplano)</label><select value={t.to ?? ""} onChange={(e) => updateTransferTarget(rowIndex, t.id!, e.target.value)} className="w-full border border-slate-300 rounded px-2 py-1 text-sm bg-white disabled:bg-slate-100" disabled={!canEditRow || isSaving}><option value="" disabled>Selecione</option>{sublevelOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}</select></div>
                                         <div className="col-span-1"><button onClick={() => removeTransfer(rowIndex, t.id!)} className="text-xs text-red-600 hover:underline disabled:opacity-50" disabled={!canEditRow || isSaving}>x</button></div>
                                       </div>
                                     ))}
-                                    {(!data[rowIndex].transfers || data[rowIndex].transfers!.length === 0) && (<p className="text-xs text-slate-500">Sem saídas.</p>)}
+                                    {(!data[rowIndex]?.transfers || data[rowIndex]!.transfers!.length === 0) && (<p className="text-xs text-slate-500">Sem saídas.</p>)}
                                   </div>
                                   <div className="mt-4 pt-2 border-t flex items-center justify-between">
                                     <button onClick={() => addTransfer(rowIndex)} className="bg-slate-200 text-slate-800 text-xs rounded px-2 py-1 hover:bg-slate-300 disabled:opacity-50" disabled={!canEditRow || isSaving}>Adicionar saída</button>
@@ -543,10 +494,31 @@ export function CapexTable() {
                             </div>
                           </details>
                         )}
-                        {isPlano && (<p className="mt-1 text-[11px] text-slate-500">Soma das transferências líquidas dos subplanos.</p>)}
+                        {isPlano && (<p className="mt-1 text-[11px] text-slate-500">Soma das transferências líquidas.</p>)}
                       </div>
                     </td>
                     <td className={`border border-slate-200 px-3 py-3 text-center min-w-48 ${saldo > 0 ? "bg-emerald-50" : saldo < 0 ? "bg-rose-50" : "bg-sky-50"}`}><span className={`text-sm font-bold ${saldo > 0 ? "text-emerald-700" : saldo < 0 ? "text-red-700" : "text-slate-900"}`}>{formatSigned(saldo)}</span></td>
+                    
+                    <td className="border border-slate-200 px-3 py-3 text-center">
+                      {isSubLevel && (
+                        <>
+                          {row.status_capex === 'FINALIZADO' ? (
+                            <span className="flex items-center justify-center gap-2 text-xs font-semibold text-emerald-600 bg-emerald-100 px-3 py-1.5 rounded-full">
+                              <CheckCircle2 size={14} />
+                              Finalizado
+                            </span>
+                          ) : (
+                            <button 
+                              onClick={() => handleFinishCapex(row)}
+                              disabled={!canEditRow}
+                              className="text-xs bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-1.5 disabled:bg-slate-300 disabled:cursor-not-allowed"
+                            >
+                              Finalizar
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -555,8 +527,8 @@ export function CapexTable() {
         </div>
       )}
       <div className="bg-slate-50 border-t border-slate-200 px-6 py-4 space-y-2">
-        <p className="text-sm text-slate-600"><span className="inline-block w-3 h-3 bg-[#e6f0ff] border border-[#0066CC] rounded mr-2"></span>Valores em <strong>azul</strong> são dados de meses não-editáveis (imutáveis no front)</p>
-        <p className="text-sm text-slate-600"><span className="inline-block w-3 h-3 bg-[#e6f7f0] border border-[#00823B] rounded mr-2"></span>Valores em <strong>verde</strong> são meses marcados como <strong>editáveis/previstos</strong> (você pode selecionar quais meses acima)</p>
+        <p className="text-sm text-slate-600"><span className="inline-block w-3 h-3 bg-[#e6f0ff] border border-[#0066CC] rounded mr-2"></span>Valores em <strong>azul</strong> são dados de meses não-editáveis.</p>
+        <p className="text-sm text-slate-600"><span className="inline-block w-3 h-3 bg-[#e6f7f0] border border-[#00823B] rounded mr-2"></span>Valores em <strong>verde</strong> são meses marcados como <strong>editáveis/previstos</strong>.</p>
         <p className="text-sm text-slate-600"><span className="inline-block w-3 h-3 bg-indigo-50 border border-indigo-200 rounded mr-2"></span><strong>Transferência (líquida)</strong> = entradas − saídas. <strong>Saldo a Distribuir</strong> = META − MELHOR VISÃO + Transferência.</p>
       </div>
       {mapOpen && !isLoading && (
@@ -578,52 +550,9 @@ export function CapexTable() {
                 <button onClick={() => setMapTab("list")} className={`text-xs px-3 py-1.5 rounded border ${mapTab === "list" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white hover:bg-slate-50"}`}>Lista</button>
               </div>
               {mapTab === "matrix" ? (
-                <div className="overflow-auto max-h-[65vh] pb-4">
-                  <table className="border-collapse">
-                    <thead>
-                      <tr>
-                        <th className="sticky left-0 z-10 bg-white border px-2 py-1 text-xs text-slate-700 text-left">Origem ↓ / Destino →</th>
-                        {filtered.labels.map((dest, j) => (<th key={j} className="border px-2 py-1 text-xs text-slate-700">{dest}</th>))}
-                        <th className="border px-2 py-1 text-xs font-semibold bg-slate-50">Saída total</th>
-                        <th className="border px-2 py-1 text-xs font-semibold bg-slate-50">Saldo líquido</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.rows.map((row, iRow) => {
-                        const idx = filtered.idxs[iRow];
-                        const out = map.outgoing[idx];
-                        const netRow = map.net[idx];
-                        return (
-                          <tr key={iRow} className="hover:bg-slate-50">
-                            <td className="sticky left-0 z-10 bg-white border px-2 py-1 text-xs text-slate-700">{filtered.labels[iRow]}</td>
-                            {row.map((v, j) => (<td key={j} className={`border px-2 py-1 text-xs text-right align-middle ${hideZeros && v === 0 ? "text-slate-300" : ""} ${heatClass(v, map.max)}`}>{v === 0 && hideZeros ? "" : formatNumber(v)}</td>))}
-                            <td className="border px-2 py-1 text-xs text-right font-semibold bg-slate-50 text-red-700">{formatNumber(out)}</td>
-                            <td className={`border px-2 py-1 text-xs text-right font-semibold bg-slate-50 ${netRow >= 0 ? "text-emerald-700" : "text-red-700"}`}>{formatSigned(netRow)}</td>
-                          </tr>
-                        );
-                      })}
-                      <tr>
-                        <td className="sticky left-0 z-10 bg-slate-50 border px-2 py-1 text-xs font-semibold">Entrada total</td>
-                        {filtered.labels.map((_, j) => {
-                          const idx = filtered.idxs[j];
-                          const inc = map.incoming[idx];
-                          return (<td key={j} className="border px-2 py-1 text-xs text-right font-semibold bg-slate-50 text-emerald-700">{formatNumber(inc)}</td>);
-                        })}
-                        <td className="border px-2 py-1 text-xs bg-slate-50" /><td className="border px-2 py-1 text-xs bg-slate-50" />
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                <div className="overflow-auto max-h-[65vh] pb-4"><table className="border-collapse"><thead><tr><th className="sticky left-0 z-10 bg-white border px-2 py-1 text-xs text-slate-700 text-left">Origem ↓ / Destino →</th>{filtered.labels.map((dest, j) => (<th key={j} className="border px-2 py-1 text-xs text-slate-700">{dest}</th>))}<th className="border px-2 py-1 text-xs font-semibold bg-slate-50">Saída total</th><th className="border px-2 py-1 text-xs font-semibold bg-slate-50">Saldo líquido</th></tr></thead><tbody>{filtered.rows.map((row, iRow) => { const idx = filtered.idxs[iRow]; const out = map.outgoing[idx]; const netRow = map.net[idx]; return ( <tr key={iRow} className="hover:bg-slate-50"><td className="sticky left-0 z-10 bg-white border px-2 py-1 text-xs text-slate-700">{filtered.labels[iRow]}</td>{row.map((v, j) => (<td key={j} className={`border px-2 py-1 text-xs text-right align-middle ${hideZeros && v === 0 ? "text-slate-300" : ""} ${heatClass(v, map.max)}`}>{v === 0 && hideZeros ? "" : formatNumber(v)}</td>))}<td className="border px-2 py-1 text-xs text-right font-semibold bg-slate-50 text-red-700">{formatNumber(out)}</td><td className={`border px-2 py-1 text-xs text-right font-semibold bg-slate-50 ${netRow >= 0 ? "text-emerald-700" : "text-red-700"}`}>{formatSigned(netRow)}</td></tr> ); })}<tr><td className="sticky left-0 z-10 bg-slate-50 border px-2 py-1 text-xs font-semibold">Entrada total</td>{filtered.labels.map((_, j) => { const idx = filtered.idxs[j]; const inc = map.incoming[idx]; return (<td key={j} className="border px-2 py-1 text-xs text-right font-semibold bg-slate-50 text-emerald-700">{formatNumber(inc)}</td>); })}<td className="border px-2 py-1 text-xs bg-slate-50" /><td className="border px-2 py-1 text-xs bg-slate-50" /></tr></tbody></table></div>
               ) : (
-                <div className="max-h-[65vh] overflow-auto pb-4">
-                  <table className="w-full border-collapse">
-                    <thead><tr className="bg-slate-50"><th className="border px-2 py-1 text-xs text-left">Origem</th><th className="border px-2 py-1 text-xs text-left">Destino</th><th className="border px-2 py-1 text-xs text-right">Valor</th></tr></thead>
-                    <tbody>
-                      {edges.filter((e) => { const q = query.trim().toLowerCase(); if (!q) return true; return e.from.toLowerCase().includes(q) || e.to.toLowerCase().includes(q); }).map((e, i) => (<tr key={i} className="hover:bg-slate-50"><td className="border px-2 py-1 text-xs">{e.from}</td><td className="border px-2 py-1 text-xs">{e.to}</td><td className="border px-2 py-1 text-xs text-right">{formatNumber(e.amount)}</td></tr>))}
-                      {edges.length === 0 && (<tr><td colSpan={3} className="text-center text-xs text-slate-500 py-4">Sem transferências.</td></tr>)}
-                    </tbody>
-                  </table>
-                </div>
+                <div className="max-h-[65vh] overflow-auto pb-4"><table className="w-full border-collapse"><thead><tr className="bg-slate-50"><th className="border px-2 py-1 text-xs text-left">Origem</th><th className="border px-2 py-1 text-xs text-left">Destino</th><th className="border px-2 py-1 text-xs text-right">Valor</th></tr></thead><tbody>{edges.filter((e) => { const q = query.trim().toLowerCase(); if (!q) return true; return e.from.toLowerCase().includes(q) || e.to.toLowerCase().includes(q); }).map((e, i) => (<tr key={i} className="hover:bg-slate-50"><td className="border px-2 py-1 text-xs">{e.from}</td><td className="border px-2 py-1 text-xs">{e.to}</td><td className="border px-2 py-1 text-xs text-right">{formatNumber(e.amount)}</td></tr>))}{edges.length === 0 && (<tr><td colSpan={3} className="text-center text-xs text-slate-500 py-4">Sem transferências.</td></tr>)}</tbody></table></div>
               )}
             </div>
           </div>

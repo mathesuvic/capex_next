@@ -9,6 +9,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// >>> ALTERAÇÃO 1: Adicionando o novo Enum de Status <<<
+enum CapexStatus {
+  PENDENTE
+  FINALIZADO
+}
+
 model CapexWeb {
   plano         String?    @db.VarChar(10)
   capex         String     @id @db.VarChar(50)
@@ -28,6 +34,9 @@ model CapexWeb {
   meta          Decimal?   @db.Decimal(18, 2)
   transfersFrom Transfer[] @relation("TransfersFrom")
   transfersTo   Transfer[] @relation("TransfersTo")
+
+  // >>> ALTERAÇÃO 2: Adicionando o novo campo de status <<<
+  status_capex  CapexStatus @default(PENDENTE)
 
   @@map("capex_web")
 }
@@ -129,19 +138,16 @@ model User {
   @@map("user")
 }
 
-// --- MODELO AJUSTADO ---
 model Subplan {
   plano_investimento String  @id
   tipo               String?
   natureza           String?
   plano_text         String?
-  id                 String? // Esta coluna 'id' da imagem parece um ID secundário
+  id                 String?
   plano              String?
 
-  // AQUI ESTÁ A CORREÇÃO:
   @@map("planos_desc")
 }
-// --- FIM DO MODELO ---
 
 enum StatusSolicitacao {
   pendente
