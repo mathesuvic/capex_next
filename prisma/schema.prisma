@@ -17,7 +17,7 @@ enum CapexStatus {
 // >>> ADICIONADO: Novo enum para o status físico
 enum PhysicalStatus {
   SIM
-  NÃO
+  NAO
   PENDENTE
 }
 
