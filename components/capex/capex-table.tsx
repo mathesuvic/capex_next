@@ -3,13 +3,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { ChevronDown, CheckCircle2, AlertCircle, CircleDot, Database } from "lucide-react";
+import { ChevronDown, CheckCircle2, AlertCircle, CircleDot, Database, XCircle } from "lucide-react";
 import { PhysicalInputModal } from './physical-input-modal';
-import { normalizeLabel } from "@/lib/utils"; // >>> NOVO: Importa a função de utils
+import { normalizeLabel } from "@/lib/utils";
 
 // Tipagens e Funções Helper
 type CapexStatus = 'PENDENTE' | 'FINALIZADO' | 'PARCIAL';
-interface RowData { id: number | string; label: string; capex: string; sublevel?: number; color?: string; cells: CellData[]; computed?: boolean; meta?: number; transfers?: TransferEntry[]; transferNet?: number; status_capex?: CapexStatus; }
+type PhysicalStatus = 'SIM' | 'NAO' | 'PENDENTE';
+interface RowData { id: number | string; label: string; capex: string; sublevel?: number; color?: string; cells: CellData[]; computed?: boolean; meta?: number; transfers?: TransferEntry[]; transferNet?: number; status_capex?: CapexStatus; status_fisico?: PhysicalStatus; }
 interface CellData { value: number | string; type: "realizado" | "previsto"; }
 interface TransferEntry { id?: number | string; amount: number; to?: string; toId?: number; }
 const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
@@ -17,7 +18,6 @@ const parseEnvEditableMonths = () => (process.env.NEXT_PUBLIC_CAPEX_EDITABLE_MON
 function calculateTotal(rowCells: CellData[]) { return rowCells.reduce((sum, c) => sum + (typeof c.value === "number" ? c.value : 0), 0); }
 const formatNumber = (num: number) => new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(num);
 const formatSigned = (n: number) => `${n > 0 ? "+" : ""}${formatNumber(n)}`;
-// >>> REMOVIDO: A definição local da função normalizeLabel foi movida para utils.ts
 const sumOutgoing = (row: RowData) => (row.transfers ?? []).reduce((s, t) => s + (Number.isFinite(t.amount) ? t.amount : 0), 0);
 
 function buildIncomingIndex(rows: RowData[]) {
@@ -98,20 +98,28 @@ export function CapexTable() {
   const [expandedPlans, setExpandedPlans] = useState<Set<string>>(new Set());
   const [physicalInputModal, setPhysicalInputModal] = useState<ModalState | null>(null);
 
+  const fetchData = async (controller: AbortController) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/capex", { cache: "no-store", signal: controller.signal });
+      if (!res.ok) throw new Error("Falha ao buscar /api/capex");
+      const json = (await res.json()) as RowData[];
+      setData(json);
+      if (expandedPlans.size === 0 && json.length > 0) {
+        setExpandedPlans(new Set(json.filter(r => r.sublevel === undefined).map(r => r.label)));
+      }
+    } catch (e) {
+      if ((e as any)?.name !== "AbortError") { console.error(e); }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     const controller = new AbortController();
-    (async () => {
-      setIsLoading(true);
-      try {
-        const res = await fetch("/api/capex", { cache: "no-store", signal: controller.signal });
-        if (!res.ok) throw new Error("Falha ao buscar /api/capex");
-        const json = (await res.json()) as RowData[];
-        setData(json);
-        setExpandedPlans(new Set(json.filter(r => r.sublevel === undefined).map(r => r.label)));
-      } catch (e) { if ((e as any)?.name !== "AbortError") { console.error(e); } } 
-      finally { setIsLoading(false); }
-    })();
+    fetchData(controller);
     return () => { controller.abort(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -149,12 +157,7 @@ export function CapexTable() {
 
   const openPhysicalInputModal = (row: RowData) => {
     if (row.sublevel !== 1 || !canEditRowLabel(row)) return;
-    const targetTotal = row.cells.reduce((sum, cell, index) => {
-      if (editableMonths.has(index) && typeof cell.value === 'number') {
-        return sum + cell.value;
-      }
-      return sum;
-    }, 0);
+    const targetTotal = calculateTotal(row.cells);
     setPhysicalInputModal({
       isOpen: true,
       capexItem: { capex: row.capex, label: row.label },
@@ -165,18 +168,15 @@ export function CapexTable() {
   const handleToggleStatus = async (rowToUpdate: RowData) => {
     const originalStatus = rowToUpdate.status_capex || 'PENDENTE';
     const newStatus = originalStatus === 'FINALIZADO' ? 'PENDENTE' : 'FINALIZADO';
-
     setData(prevData => prevData.map(row => 
       row.capex === rowToUpdate.capex ? { ...row, status_capex: newStatus } : row
     ));
-
     try {
       const res = await fetch('/api/capex/status', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ capex: rowToUpdate.capex, status: newStatus }),
       });
-
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || `Falha ao ${newStatus === 'FINALIZADO' ? 'finalizar' : 'reabrir'} o subplano.`);
@@ -440,9 +440,18 @@ export function CapexTable() {
                             <button 
                                 onClick={() => openPhysicalInputModal(row)}
                                 disabled={!canEditRow}
-                                className="flex w-full items-center justify-center gap-2 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded px-3 py-1.5 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className={`
+                                  flex w-full items-center justify-center gap-2 text-xs font-semibold rounded-md px-3 py-1.5 border transition-colors
+                                  disabled:opacity-50 disabled:cursor-not-allowed
+                                  ${row.status_fisico === 'SIM' ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border-emerald-300' : ''}
+                                  ${row.status_fisico === 'NAO' ? 'bg-rose-100 hover:bg-rose-200 text-rose-800 border-rose-300' : ''}
+                                  ${(row.status_fisico === 'PENDENTE' || !row.status_fisico) ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300' : ''}
+                                `}
                             >
-                                <Database size={14} /> Detalhar
+                                {row.status_fisico === 'SIM' && <CheckCircle2 size={14} />}
+                                {row.status_fisico === 'NAO' && <XCircle size={14} />}
+                                {(row.status_fisico === 'PENDENTE' || !row.status_fisico) && <Database size={14} />}
+                                Detalhar
                             </button>
                         )}
                         {isSubLevel && row.status_capex !== 'FINALIZADO' && (
@@ -494,6 +503,11 @@ export function CapexTable() {
         <PhysicalInputModal 
           {...physicalInputModal} 
           onClose={() => setPhysicalInputModal(null)} 
+          onSaveSuccess={() => {
+            setPhysicalInputModal(null);
+            const controller = new AbortController();
+            fetchData(controller);
+          }}
         /> 
       )}
     </>

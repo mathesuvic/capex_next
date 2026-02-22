@@ -14,36 +14,41 @@ enum CapexStatus {
   FINALIZADO
 }
 
-model CapexWeb {
-  plano          String?    @db.VarChar(10)
-  capex          String     @id @db.VarChar(50)
-  jan_ano        Decimal?   @db.Decimal(18, 2)
-  fev_ano        Decimal?   @db.Decimal(18, 2)
-  mar_ano        Decimal?   @db.Decimal(18, 2)
-  abr_ano        Decimal?   @db.Decimal(18, 2)
-  mai_ano        Decimal?   @db.Decimal(18, 2)
-  jun_ano        Decimal?   @db.Decimal(18, 2)
-  jul_ano        Decimal?   @db.Decimal(18, 2)
-  ago_ano        Decimal?   @db.Decimal(18, 2)
-  set_ano        Decimal?   @db.Decimal(18, 2)
-  out_ano        Decimal?   @db.Decimal(18, 2)
-  nov_ano        Decimal?   @db.Decimal(18, 2)
-  dez_ano        Decimal?   @db.Decimal(18, 2)
-  ordem          Int        @default(0)
-  meta           Decimal?   @db.Decimal(18, 2)
-  status_capex   CapexStatus @default(PENDENTE)
+// >>> ADICIONADO: Novo enum para o status físico
+enum PhysicalStatus {
+  SIM
+  NÃO
+  PENDENTE
+}
 
-  transfersFrom  Transfer[] @relation("TransfersFrom")
-  transfersTo    Transfer[] @relation("TransfersTo")
+model CapexWeb {
+  plano          String?        @db.VarChar(10)
+  capex          String         @id @db.VarChar(50)
+  jan_ano        Decimal?       @db.Decimal(18, 2)
+  fev_ano        Decimal?       @db.Decimal(18, 2)
+  mar_ano        Decimal?       @db.Decimal(18, 2)
+  abr_ano        Decimal?       @db.Decimal(18, 2)
+  mai_ano        Decimal?       @db.Decimal(18, 2)
+  jun_ano        Decimal?       @db.Decimal(18, 2)
+  jul_ano        Decimal?       @db.Decimal(18, 2)
+  ago_ano        Decimal?       @db.Decimal(18, 2)
+  set_ano        Decimal?       @db.Decimal(18, 2)
+  out_ano        Decimal?       @db.Decimal(18, 2)
+  nov_ano        Decimal?       @db.Decimal(18, 2)
+  dez_ano        Decimal?       @db.Decimal(18, 2)
+  ordem          Int            @default(0)
+  meta           Decimal?       @db.Decimal(18, 2)
+  status_capex   CapexStatus    @default(PENDENTE)
   
-  // >>> ADICIONADO: Relação com a nova tabela de Físicos <<<
+  // >>> ADICIONADO: Nova coluna para o status físico
+  status_fisico  PhysicalStatus @default(PENDENTE)
+
+  transfersFrom  Transfer[]     @relation("TransfersFrom")
+  transfersTo    Transfer[]     @relation("TransfersTo")
   physicalInputs PhysicalInput[]
 
   @@map("capex_web")
 }
-
-
-// Descomente o modelo para recriá-lo corretamente
 
 model PhysicalInput {
   id            Int      @id @default(autoincrement())
@@ -51,17 +56,13 @@ model PhysicalInput {
   value         Decimal  @db.Decimal(18, 2)
   month         Int?
   capexWebCapex String   @db.VarChar(50)
-  
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-
   capexWeb      CapexWeb @relation(fields: [capexWebCapex], references: [capex], onDelete: Cascade)
 
   @@index([capexWebCapex])
   @@map("physical_inputs")
 }
-
-
 
 model Transfer {
   id        Int      @id @default(autoincrement())

@@ -2,6 +2,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
+import { PhysicalStatus } from "@prisma/client"; // <<< ADICIONADO AQUI
 
 export const runtime = "nodejs";
 // opcional para evitar cache em dev:
@@ -64,25 +65,22 @@ export async function GET(req: NextRequest) {
       const isPlano = row.plano === "plano";
 
       const cells = monthMapping.map((key, idx) => ({
-        // A sua lógica de 'realizado' vs 'previsto' parece estar baseada no índice do mês.
-        // Se precisar que seja baseada no status, teríamos que ajustar aqui. Por ora, mantive.
         type: idx < 10 ? "realizado" : "previsto",
         value: toNum((row as any)[key]),
       }));
 
       return {
-        // As linhas de 'id' e 'label' foram renomeadas para mais clareza no frontend.
         id: row.capex,
         label: row.capex,
-        // >>> CORREÇÃO 1: Adicionando o campo 'capex' para ser usado como ID único.
         capex: row.capex,
         sublevel: isSubLevel ? 1 : undefined,
         color: isPlano ? planoColors[planoCount++ % planoColors.length] : undefined,
         cells,
         meta: toNum((row as any).meta),
         transfers: transfersByFrom.get(row.capex) ?? [],
-        // >>> CORREÇÃO 2: Adicionando o campo 'status_capex' à resposta da API.
         status_capex: row.status_capex,
+        // ✅ ✅ ✅ ESTA É A ÚNICA LINHA QUE ESTAMOS ADICIONANDO ✅ ✅ ✅
+        status_fisico: row.status_fisico as PhysicalStatus, 
       };
     });
 
