@@ -5,55 +5,40 @@ import prisma from '@/lib/prisma';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 
-// Schema para um único item físico, usado no POST
+// Schema para um item físico
 const PhysicalItemSchema = z.object({
   id: z.union([z.string(), z.number()]),
   name: z.string().min(1, "O nome do físico não pode ser vazio."),
   risco: z.enum(['BAIXO', 'MEDIO', 'ALTO']),
-  jan: z.number().optional().default(0),
-  fev: z.number().optional().default(0),
-  mar: z.number().optional().default(0),
-  abr: z.number().optional().default(0),
-  mai: z.number().optional().default(0),
-  jun: z.number().optional().default(0),
-  jul: z.number().optional().default(0),
-  ago: z.number().optional().default(0),
-  set: z.number().optional().default(0),
-  out: z.number().optional().default(0),
-  nov: z.number().optional().default(0),
-  dez: z.number().optional().default(0),
+  jan: z.number().optional().default(0), fev: z.number().optional().default(0),
+  mar: z.number().optional().default(0), abr: z.number().optional().default(0),
+  mai: z.number().optional().default(0), jun: z.number().optional().default(0),
+  jul: z.number().optional().default(0), ago: z.number().optional().default(0),
+  set: z.number().optional().default(0), out: z.number().optional().default(0),
+  nov: z.number().optional().default(0), dez: z.number().optional().default(0),
 });
 
-// Schema para o corpo da requisição POST
+// =================================================================
+// Schema do POST agora espera 'editableMonths'
+// =================================================================
 const PostSchema = z.object({
-  // =================================================================
-  // CORREÇÃO 2: A validação do Zod agora espera 'capexLabel'
-  // =================================================================
   capexLabel: z.string().min(1),
   items: z.array(PhysicalItemSchema),
+  editableMonths: z.array(z.string()),
 });
 
-/**
- * GET: Busca todos os físicos para um determinado CAPEX.
- */
+// GET não precisa de alterações
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    // =================================================================
-    // CORREÇÃO 1: O parâmetro na URL agora é lido como 'capexLabel'
-    // =================================================================
     const capexLabel = searchParams.get('capexLabel');
-
     if (!capexLabel) {
       return NextResponse.json({ error: 'O parâmetro capexLabel é obrigatório.' }, { status: 400 });
     }
-
     const physicalInputs = await prisma.physicalInput.findMany({
       where: { capexLabel },
       orderBy: { createdAt: 'asc' },
     });
-
-    // Converte os campos Decimal do Prisma para number para o frontend
     const plainObjects = physicalInputs.map(item => {
         const newItem: Record<string, any> = { ...item };
         for (const key in newItem) {
@@ -63,18 +48,14 @@ export async function GET(request: Request) {
         }
         return newItem;
     });
-
     return NextResponse.json(plainObjects);
-
   } catch (error) {
     console.error("Erro ao buscar físicos:", error);
     return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 });
   }
 }
 
-/**
- * POST: Sincroniza (cria, atualiza, deleta) a lista de físicos para um CAPEX.
- */
+// POST totalmente corrigido
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -84,58 +65,75 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Dados inválidos.', details: validation.error.format() }, { status: 400 });
     }
 
-    // A validação agora retorna 'capexLabel'
-    const { capexLabel, items } = validation.data;
-
-    const incomingIds = items
-      .map(item => typeof item.id === 'number' ? item.id : null)
-      .filter((id): id is number => id !== null);
+    // Agora recebemos a lista de meses a serem comparados
+    const { capexLabel, items, editableMonths } = validation.data;
 
     await prisma.$transaction(async (tx) => {
-      const existingItems = await tx.physicalInput.findMany({
-        where: { capexLabel },
-        select: { id: true },
-      });
+      // ETAPA 1: Sincronizar físicos (sem alterações)
+      const incomingIds = items.map(item => typeof item.id === 'number' ? item.id : null).filter((id): id is number => id !== null);
+      const existingItems = await tx.physicalInput.findMany({ where: { capexLabel }, select: { id: true } });
       const existingIds = existingItems.map(item => item.id);
       const idsToDelete = existingIds.filter(id => !incomingIds.includes(id));
-      
       if (idsToDelete.length > 0) {
-        await tx.physicalInput.deleteMany({
-          where: { id: { in: idsToDelete } },
-        });
+        await tx.physicalInput.deleteMany({ where: { id: { in: idsToDelete } } });
       }
-
       const itemsToCreate = items.filter(item => typeof item.id === 'string');
       const itemsToUpdate = items.filter((item): item is (typeof items[0] & { id: number }) => typeof item.id === 'number');
-
       if (itemsToCreate.length > 0) {
         await tx.physicalInput.createMany({
-          data: itemsToCreate.map(({ id, ...rest }) => ({
-            ...rest,
-            capexLabel: capexLabel,
-          })),
+          data: itemsToCreate.map(({ id, ...rest }) => ({ ...rest, capexLabel: capexLabel })),
         });
       }
-
       for (const item of itemsToUpdate) {
         await tx.physicalInput.update({
           where: { id: item.id },
-          data: {
-            name: item.name,
-            risco: item.risco,
-            jan: item.jan, fev: item.fev, mar: item.mar,
-            abr: item.abr, mai: item.mai, jun: item.jun,
-            jul: item.jul, ago: item.ago, set: item.set,
-            out: item.out, nov: item.nov, dez: item.dez,
-          },
+          data: { name: item.name, risco: item.risco, jan: item.jan, fev: item.fev, mar: item.mar, abr: item.abr, mai: item.mai, jun: item.jun, jul: item.jul, ago: item.ago, set: item.set, out: item.out, nov: item.nov, dez: item.dez },
         });
       }
+
+      // ETAPA 2: Calcular e atualizar status (lógica corrigida)
+      let newStatus: 'SIM' | 'NAO' | 'PENDENTE';
+
+      if (items.length === 0) {
+        newStatus = 'PENDENTE';
+      } else {
+        const financialCapex = await tx.capexWeb.findUnique({
+          where: { capex: capexLabel },
+        });
+
+        if (!financialCapex) {
+            throw new Error(`Registro financeiro para o capex '${capexLabel}' não encontrado.`);
+        }
+        
+        newStatus = 'SIM'; // Começa assumindo que está tudo certo
+
+        // =================================================================
+        // CORREÇÃO: O loop agora itera sobre a lista de meses recebida,
+        // garantindo que apenas os meses relevantes sejam comparados.
+        // =================================================================
+        for (const month of editableMonths) {
+          const physicalTotalForMonth = items.reduce((sum, item) => sum + (item[month] || 0), 0);
+          const financialValueForMonth = financialCapex[`${month}_ano` as keyof typeof financialCapex];
+          const financialNumber = financialValueForMonth ? Number(financialValueForMonth) : 0;
+          
+          if (Math.abs(physicalTotalForMonth - financialNumber) > 0.01) {
+            newStatus = 'NAO'; // Se um mês falhar, o status é NÃO e paramos.
+            break; 
+          }
+        }
+      }
+      
+      // Atualiza o status na tabela principal
+      await tx.capexWeb.update({
+        where: { capex: capexLabel },
+        data: { status_fisico: newStatus },
+      });
     });
 
-    return NextResponse.json({ message: 'Detalhamento físico salvo com sucesso.' }, { status: 200 });
+    return NextResponse.json({ message: 'Detalhamento físico salvo e status atualizado com sucesso.' }, { status: 200 });
 
   } catch (error) {
-    console.error("Erro ao salvar físicos:", error);
+    console.error("Erro ao salvar físicos e atualizar status:", error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
          return NextResponse.json({ error: 'Erro: Já existe um item com o mesmo nome para este CAPEX.' }, { status: 409 });
     }

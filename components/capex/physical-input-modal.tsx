@@ -10,33 +10,27 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from 'sonner';
 import { Trash2, PlusCircle, Upload, Download, Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils'; // Importe o utilitário para classes condicionais
+import { cn } from '@/lib/utils';
 
-// Tipos e constantes para corresponder ao backend
 type Risco = 'BAIXO' | 'MEDIO' | 'ALTO';
 
 interface PhysicalItem {
-  id: number | string; // Usamos string para itens novos, não salvos
+  id: number | string;
   name: string;
   risco: Risco;
-  [key: string]: any; // Permite campos dinâmicos para os meses (jan, fev, etc.)
+  [key: string]: any;
 }
 
-// =================================================================
-// Props ATUALIZADAS para receber os meses editáveis e os dados financeiros
-// =================================================================
 interface PhysicalInputModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: () => void;
   capexLabel: string | null;
-  editableMonths: string[]; // Ex: ['jul', 'ago', 'set']
-  financialData: Record<string, number>; // Ex: { jul: 50000, ago: 90000, set: 78588 }
+  editableMonths: string[];
+  financialData: Record<string, number>;
 }
-// =================================================================
 
 const formatCurrency = (value: number) => {
-  // Adicionado `|| 0` para evitar erros com valores nulos ou indefinidos
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
@@ -48,8 +42,8 @@ export function PhysicalInputModal({
   onClose,
   onSave,
   capexLabel,
-  editableMonths, // Nova prop
-  financialData, // Nova prop
+  editableMonths,
+  financialData,
 }: PhysicalInputModalProps) {
   const [items, setItems] = useState<PhysicalItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -67,11 +61,10 @@ export function PhysicalInputModal({
         .catch(() => toast.error('Erro ao carregar os dados físicos existentes.'))
         .finally(() => setIsLoading(false));
     } else {
-      setItems([]); // Limpa o estado ao fechar
+      setItems([]);
     }
   }, [isOpen, capexLabel]);
 
-  // Calcula o total para CADA MÊS editável
   const monthlyTotals = useMemo(() => {
     const totals: Record<string, number> = {};
     for (const month of editableMonths) {
@@ -80,18 +73,15 @@ export function PhysicalInputModal({
     return totals;
   }, [items, editableMonths]);
 
-  // Calcula o total GERAL físico (soma de todos os meses editáveis)
   const totalPhysicalValue = useMemo(() => {
     return Object.values(monthlyTotals).reduce((sum, monthTotal) => sum + monthTotal, 0);
   }, [monthlyTotals]);
-  
-  // Calcula o total GERAL financeiro (soma de todos os meses editáveis)
+
   const totalFinancialValue = useMemo(() => {
      return Object.values(financialData).reduce((sum, monthValue) => sum + (monthValue || 0), 0);
   }, [financialData]);
 
   const handleAddItem = () => {
-    // Inicializa APENAS os meses editáveis com 0
     const newMonthValues = editableMonths.reduce((acc, month) => ({ ...acc, [month]: 0 }), {});
     setItems([
       ...items,
@@ -115,7 +105,7 @@ export function PhysicalInputModal({
       )
     );
   };
-  
+
   const handleSave = async () => {
     if (!capexLabel) return;
     setIsLoading(true);
@@ -130,7 +120,11 @@ export function PhysicalInputModal({
       const response = await fetch('/api/capex/physical-inputs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ capexLabel, items }),
+        // =================================================================
+        // CORREÇÃO: Adicionamos 'editableMonths' ao corpo da requisição
+        // para que o backend saiba quais meses comparar.
+        // =================================================================
+        body: JSON.stringify({ capexLabel, items, editableMonths }),
       });
 
       if (!response.ok) {
@@ -170,8 +164,8 @@ export function PhysicalInputModal({
 
         const result = await response.json();
         toast.success(`${result.importedCount} itens importados com sucesso!`);
-        onSave(); // Recarrega os dados na tela principal
-        onClose(); // Fecha o modal
+        onSave();
+        onClose();
 
     } catch (error) {
         toast.error((error as Error).message);
@@ -209,7 +203,6 @@ export function PhysicalInputModal({
           
           <div className="border rounded-md">
             <Table>
-              {/* HEADER: Agora usa `editableMonths` para criar as colunas */}
               <TableHeader className="sticky top-0 bg-slate-50 z-10">
                 <TableRow>
                   <TableHead className="min-w-[250px]">Nome do Físico</TableHead>
@@ -239,7 +232,6 @@ export function PhysicalInputModal({
                               </SelectContent>
                             </Select>
                         </TableCell>
-                        {/* Células de Input: Também usam `editableMonths` */}
                         {editableMonths.map(m => (
                            <TableCell key={m}>
                              <Input type="number" value={item[m] || 0} onChange={(e) => handleItemChange(item.id, m, parseFloat(e.target.value) || 0)} className="h-8 text-right"/>
@@ -251,26 +243,22 @@ export function PhysicalInputModal({
                       </TableRow>
                     ))}
                     
-                    {/* ================================================================ */}
-                    {/* NOVAS LINHAS DE TOTAL E COMPARAÇÃO                              */}
-                    {/* ================================================================ */}
                     <TableRow className="bg-slate-50 font-bold sticky bottom-0">
                         <TableCell colSpan={2} className="text-right">Total Físico</TableCell>
                         {editableMonths.map(month => {
                             const physicalTotal = monthlyTotals[month];
                             const financialTarget = financialData[month] || 0;
-                            // Compara com tolerância para evitar problemas com ponto flutuante
                             const matches = Math.abs(physicalTotal - financialTarget) < 0.01;
                             return (
                                 <TableCell key={month} className={cn(
                                     "text-right",
-                                    !matches && "text-red-600 font-extrabold" // Destaque se não bater
+                                    !matches && "text-red-600 font-extrabold"
                                 )}>
                                     {formatCurrency(physicalTotal)}
                                 </TableCell>
                             )
                         })}
-                        <TableCell></TableCell>{/* Célula vazia para a coluna Ação */}
+                        <TableCell></TableCell>
                     </TableRow>
                     <TableRow className="bg-slate-100 font-medium">
                         <TableCell colSpan={2} className="text-right">Meta (Financeiro)</TableCell>
@@ -279,9 +267,8 @@ export function PhysicalInputModal({
                                 {formatCurrency(financialData[month] || 0)}
                             </TableCell>
                         ))}
-                        <TableCell></TableCell>{/* Célula vazia para a coluna Ação */}
+                        <TableCell></TableCell>
                     </TableRow>
-                    {/* ================================================================ */}
                   </>
                 )}
               </TableBody>
@@ -292,7 +279,6 @@ export function PhysicalInputModal({
         <DialogFooter className="mt-4 pt-4 border-t flex-shrink-0">
           <div className="w-full flex justify-between items-center">
              <div className="text-sm space-y-1">
-                {/* Rodapé agora mostra a soma apenas dos meses relevantes */}
                 <p>Total dos Físicos: <span className="font-bold text-slate-800">{formatCurrency(totalPhysicalValue)}</span></p>
                 <p>Valor Alvo (Financeiro): <span className="font-bold text-slate-800">{formatCurrency(totalFinancialValue)}</span></p>
              </div>
