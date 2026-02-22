@@ -1,48 +1,69 @@
 // app/api/capex/status/route.ts
-
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { z } from 'zod';
 import { getCurrentUser } from '@/lib/auth';
+import { normalizeLabel } from '@/lib/utils';
 
-export async function PATCH(req: Request) {
+const patchSchema = z.object({
+  capex: z.string().min(1, 'O CAPEX é obrigatório.'),
+  status: z.enum(['PENDENTE', 'FINALIZADO']),
+});
+
+export async function PATCH(request: Request) {
   try {
     const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
+    
+    if (!user?.id) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const { capexLabel } = (await req.json()) as { capexLabel: string };
-    if (!capexLabel) {
-      return NextResponse.json({ error: 'O "capexLabel" é obrigatório' }, { status: 400 });
-    }
+    const body = await request.json();
+    const validation = patchSchema.safeParse(body);
 
-    // Verifica a permissão do usuário
-    const isAdmin = user.role === 'ADMIN';
-    let hasPermission = isAdmin;
-
-    if (!isAdmin) {
-      const permission = await prisma.capexPermission.findUnique({
-        where: { userId_capexLabel: { userId: user.id, capexLabel } },
-      });
-      if (permission) {
-        hasPermission = true;
-      }
-    }
-
-    if (!hasPermission) {
-      return NextResponse.json({ error: 'Acesso negado. Você não tem permissão para este subplano.' }, { status: 403 });
+    if (!validation.success) {
+      return NextResponse.json({ error: 'Dados inválidos.', details: validation.error.format() }, { status: 400 });
     }
     
-    // Atualiza o status no banco de dados
-    const updatedCapex = await prisma.capexWeb.update({
-      where: { capex: capexLabel },
-      data: { status_capex: 'FINALIZADO' },
+    const { capex, status } = validation.data;
+
+    const userPermissions = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { 
+        role: true, 
+        capexPermissions: { select: { capexLabel: true } }
+      },
     });
 
-    return NextResponse.json(updatedCapex);
+    // >>> CORREÇÃO: Buscando o campo 'capex' em vez de 'label'.
+    const subplanToUpdate = await prisma.capexWeb.findUnique({
+      where: { capex },
+      select: { capex: true } // O campo que contém o nome do subplano é 'capex'
+    });
 
-  } catch (error: any) {
-    console.error("Falha ao atualizar status do capex:", error);
-    return NextResponse.json({ error: 'Erro interno do servidor', details: error.message }, { status: 500 });
+    if (!subplanToUpdate) {
+        return NextResponse.json({ error: 'Subplano não encontrado.' }, { status: 404 });
+    }
+
+    // >>> CORREÇÃO: Usando subplanToUpdate.capex para a comparação.
+    const canEdit = userPermissions?.role === 'ADMIN' || 
+                    userPermissions?.capexPermissions.some(s => normalizeLabel(s.capexLabel) === normalizeLabel(subplanToUpdate.capex));
+
+    if (!canEdit) {
+      return NextResponse.json({ error: 'Você não tem permissão para editar este subplano.' }, { status: 403 });
+    }
+
+    const updatedSubplan = await prisma.capexWeb.update({
+      where: { capex },
+      data: {
+        status_capex: status,
+      },
+    });
+
+    return NextResponse.json(updatedSubplan, { status: 200 });
+
+  } catch (error) {
+    console.error("Erro ao atualizar status do CAPEX:", error);
+    return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 });
   }
 }

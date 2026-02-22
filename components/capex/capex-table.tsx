@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { ChevronDown, CheckCircle2, AlertCircle, CircleDot, Database } from "lucide-react";
 import { PhysicalInputModal } from './physical-input-modal';
+import { normalizeLabel } from "@/lib/utils"; // >>> NOVO: Importa a função de utils
 
 // Tipagens e Funções Helper
 type CapexStatus = 'PENDENTE' | 'FINALIZADO' | 'PARCIAL';
@@ -16,7 +17,7 @@ const parseEnvEditableMonths = () => (process.env.NEXT_PUBLIC_CAPEX_EDITABLE_MON
 function calculateTotal(rowCells: CellData[]) { return rowCells.reduce((sum, c) => sum + (typeof c.value === "number" ? c.value : 0), 0); }
 const formatNumber = (num: number) => new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(num);
 const formatSigned = (n: number) => `${n > 0 ? "+" : ""}${formatNumber(n)}`;
-function normalizeLabel(input: string) { return (input ?? "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase(); }
+// >>> REMOVIDO: A definição local da função normalizeLabel foi movida para utils.ts
 const sumOutgoing = (row: RowData) => (row.transfers ?? []).reduce((s, t) => s + (Number.isFinite(t.amount) ? t.amount : 0), 0);
 
 function buildIncomingIndex(rows: RowData[]) {
@@ -77,7 +78,6 @@ function heatClass(v: number, max: number) { if (v <= 0 || max <= 0) return "bg-
 
 type PermissionsResponse = | { isAdmin: true; allowedLabels: "ALL" } | { isAdmin: false; allowedLabels: string[] };
 
-// >>> CORRIGIDO: A tipagem do estado do modal agora usa 'targetTotal'
 interface ModalState {
   isOpen: boolean;
   capexItem: { capex: string; label: string; };
@@ -130,7 +130,7 @@ export function CapexTable() {
 
   const subplans = useMemo(() => data.filter((r) => r.sublevel === 1).map((r) => ({ label: r.label, id: r.id })), [data]);
   const sublevelOptions = subplans.map((s) => s.label);
-  const incomingIndex = buildIncomingIndex(data);
+  const incomingIndex = useMemo(() => buildIncomingIndex(data), [data]);
   const displayData = useMemo(() => computeDisplay(data, editableMonths), [data, editableMonths]);
   const togglePlanExpansion = (planLabel: string) => { setExpandedPlans(prev => { const next = new Set(prev); if (next.has(planLabel)) { next.delete(planLabel); } else { next.add(planLabel); } return next; }); };
   const expandAll = () => { const allPlanLabels = new Set(data.filter(r => r.sublevel === undefined).map(r => r.label)); setExpandedPlans(allPlanLabels); };
@@ -162,26 +162,31 @@ export function CapexTable() {
     });
   };
   
-  const handleFinishCapex = async (rowToUpdate: RowData) => {
+  const handleToggleStatus = async (rowToUpdate: RowData) => {
+    const originalStatus = rowToUpdate.status_capex || 'PENDENTE';
+    const newStatus = originalStatus === 'FINALIZADO' ? 'PENDENTE' : 'FINALIZADO';
+
     setData(prevData => prevData.map(row => 
-      row.capex === rowToUpdate.capex ? { ...row, status_capex: 'FINALIZADO' } : row
+      row.capex === rowToUpdate.capex ? { ...row, status_capex: newStatus } : row
     ));
+
     try {
       const res = await fetch('/api/capex/status', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ capexLabel: rowToUpdate.capex }),
+        body: JSON.stringify({ capex: rowToUpdate.capex, status: newStatus }),
       });
+
       if (!res.ok) {
         const errorData = await res.json();
-        throw new Error(errorData.error || 'Falha ao finalizar o subplano.');
+        throw new Error(errorData.error || `Falha ao ${newStatus === 'FINALIZADO' ? 'finalizar' : 'reabrir'} o subplano.`);
       }
     } catch (error) {
       console.error(error);
       setData(prevData => prevData.map(row => 
-        row.capex === rowToUpdate.capex ? { ...row, status_capex: 'PENDENTE' } : row
+        row.capex === rowToUpdate.capex ? { ...row, status_capex: originalStatus } : row
       ));
-      alert(`Não foi possível finalizar o subplano: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+      alert(`Não foi possível alterar o status: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
   };
 
@@ -345,9 +350,10 @@ export function CapexTable() {
                       </td>
                       {row.cells.map((cell, cellIndex) => {
                         const isEditable = isSubLevel && editableMonths.has(cellIndex) && canEditRow;
+                        const isLocked = row.status_capex === 'FINALIZADO';
                         return (
                           <td key={cellIndex} className={`border border-slate-200 px-3 py-3 text-center min-w-32 ${!editableMonths.has(cellIndex) ? "bg-[#e6f0ff] text-slate-900" : "bg-white"}`}>
-                            {isEditable ? (<input type="number" value={cell.value === 0 ? "" : cell.value} onChange={(e) => handleCellChange(row, rowIndex, cellIndex, e.target.value)} className="w-full bg-[#e6f7f0] border border-[#00823B] rounded px-2 py-1 text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#00823B] focus:bg-white" placeholder="0" />) : (<span className="text-sm font-medium text-slate-700">{formatNumber(typeof cell.value === "number" ? cell.value : 0)}</span>)}
+                            {isEditable ? (<input type="number" value={cell.value === 0 ? "" : cell.value} onChange={(e) => handleCellChange(row, rowIndex, cellIndex, e.target.value)} className={`w-full border rounded px-2 py-1 text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#00823B] focus:bg-white ${isLocked ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed' : 'bg-[#e6f7f0] border-[#00823B]'}`} placeholder="0" disabled={isLocked} />) : (<span className="text-sm font-medium text-slate-700">{formatNumber(typeof cell.value === "number" ? cell.value : 0)}</span>)}
                           </td>
                         );
                       })}
@@ -395,9 +401,31 @@ export function CapexTable() {
                       <td className={`border border-slate-200 px-3 py-3 text-center min-w-48 ${saldo > 0 ? "bg-emerald-50" : saldo < 0 ? "bg-rose-50" : "bg-sky-50"}`}><span className={`text-sm font-bold ${saldo > 0 ? "text-emerald-700" : saldo < 0 ? "text-red-700" : "text-slate-900"}`}>{formatSigned(saldo)}</span></td>
                       <td className="border border-slate-200 px-3 py-3 text-center">
                         {isSubLevel && (
-                          <>
-                            {row.status_capex === 'FINALIZADO' ? (<span className="flex items-center justify-center gap-2 text-xs font-semibold text-emerald-600 bg-emerald-100 px-3 py-1.5 rounded-full"><CheckCircle2 size={14} />Finalizado</span>) : (<button onClick={() => handleFinishCapex(row)} disabled={!canEditRow} className="text-xs bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-1.5 disabled:bg-slate-300 disabled:cursor-not-allowed">Finalizar</button>)}
-                          </>
+                           <div className="group relative flex justify-center items-center">
+                            {row.status_capex === 'FINALIZADO' ? (
+                              <button
+                                onClick={() => handleToggleStatus(row)}
+                                disabled={!canEditRow}
+                                className="flex items-center justify-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-full border border-transparent transition-colors hover:bg-amber-100 hover:text-amber-800 hover:border-amber-400 disabled:hover:bg-emerald-100 disabled:hover:text-emerald-700 disabled:hover:border-transparent disabled:opacity-60 disabled:cursor-not-allowed"
+                              >
+                                <CheckCircle2 size={14} />
+                                Finalizado
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={() => handleToggleStatus(row)}
+                                disabled={!canEditRow}
+                                className="text-xs bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-1.5 disabled:bg-slate-300 disabled:cursor-not-allowed"
+                              >
+                                Finalizar
+                              </button>
+                            )}
+                            {row.status_capex === 'FINALIZADO' && canEditRow && (
+                                <span className="absolute -top-8 w-max bg-slate-800 text-white text-xs rounded-md px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                    Reabrir para edição
+                                </span>
+                            )}
+                          </div>
                         )}
                         {isPlano && (
                           <>
