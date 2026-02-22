@@ -1,6 +1,6 @@
 // app/capex/page.tsx
 import Link from "next/link";
-import { CapexTable } from "@/components/capex-table";
+import { CapexTable } from "@/components/capex/capex-table";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifyToken, AUTH_COOKIE } from "@/lib/jwt";

@@ -9,37 +9,57 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// >>> ALTERAÇÃO 1: Adicionando o novo Enum de Status <<<
 enum CapexStatus {
   PENDENTE
   FINALIZADO
 }
 
 model CapexWeb {
-  plano         String?    @db.VarChar(10)
-  capex         String     @id @db.VarChar(50)
-  jan_ano       Decimal?   @db.Decimal(18, 2)
-  fev_ano       Decimal?   @db.Decimal(18, 2)
-  mar_ano       Decimal?   @db.Decimal(18, 2)
-  abr_ano       Decimal?   @db.Decimal(18, 2)
-  mai_ano       Decimal?   @db.Decimal(18, 2)
-  jun_ano       Decimal?   @db.Decimal(18, 2)
-  jul_ano       Decimal?   @db.Decimal(18, 2)
-  ago_ano       Decimal?   @db.Decimal(18, 2)
-  set_ano       Decimal?   @db.Decimal(18, 2)
-  out_ano       Decimal?   @db.Decimal(18, 2)
-  nov_ano       Decimal?   @db.Decimal(18, 2)
-  dez_ano       Decimal?   @db.Decimal(18, 2)
-  ordem         Int        @default(0)
-  meta          Decimal?   @db.Decimal(18, 2)
-  transfersFrom Transfer[] @relation("TransfersFrom")
-  transfersTo   Transfer[] @relation("TransfersTo")
+  plano          String?    @db.VarChar(10)
+  capex          String     @id @db.VarChar(50)
+  jan_ano        Decimal?   @db.Decimal(18, 2)
+  fev_ano        Decimal?   @db.Decimal(18, 2)
+  mar_ano        Decimal?   @db.Decimal(18, 2)
+  abr_ano        Decimal?   @db.Decimal(18, 2)
+  mai_ano        Decimal?   @db.Decimal(18, 2)
+  jun_ano        Decimal?   @db.Decimal(18, 2)
+  jul_ano        Decimal?   @db.Decimal(18, 2)
+  ago_ano        Decimal?   @db.Decimal(18, 2)
+  set_ano        Decimal?   @db.Decimal(18, 2)
+  out_ano        Decimal?   @db.Decimal(18, 2)
+  nov_ano        Decimal?   @db.Decimal(18, 2)
+  dez_ano        Decimal?   @db.Decimal(18, 2)
+  ordem          Int        @default(0)
+  meta           Decimal?   @db.Decimal(18, 2)
+  status_capex   CapexStatus @default(PENDENTE)
 
-  // >>> ALTERAÇÃO 2: Adicionando o novo campo de status <<<
-  status_capex  CapexStatus @default(PENDENTE)
+  transfersFrom  Transfer[] @relation("TransfersFrom")
+  transfersTo    Transfer[] @relation("TransfersTo")
+  
+  // >>> ADICIONADO: Relação com a nova tabela de Físicos <<<
+  physicalInputs PhysicalInput[]
 
   @@map("capex_web")
 }
+
+// >>> ADICIONADO: Nova tabela para armazenar os Inputs Físicos <<<
+model PhysicalInput {
+  id           Int      @id @default(autoincrement())
+  name         String   // Nome do físico, ex: "Transformador 500kVA"
+  value        Decimal  @db.Decimal(18, 2) // Valor do físico
+  month        Int      // Mês de referência (1 para Jan, 2 para Fev, etc.)
+  capexWebCapex String   @db.VarChar(50)
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relação com a tabela CapexWeb
+  capexWeb     CapexWeb @relation(fields: [capexWebCapex], references: [capex], onDelete: Cascade)
+
+  @@index([capexWebCapex, month]) // Index para buscas rápidas
+  @@map("physical_inputs") // Define o nome da tabela no banco
+}
+
 
 model Transfer {
   id        Int      @id @default(autoincrement())
