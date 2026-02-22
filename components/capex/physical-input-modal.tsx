@@ -1,183 +1,284 @@
 // components/capex/physical-input-modal.tsx
+
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { X, Trash2, Plus } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from 'sonner';
+import { Trash2, PlusCircle, Upload, Download, Loader2 } from 'lucide-react';
 
-interface Item {
-  id?: number | string;
+// Tipos e constantes para corresponder ao backend
+type Risco = 'BAIXO' | 'MEDIO' | 'ALTO';
+const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+interface PhysicalItem {
+  id: number | string; // Usamos string para itens novos, não salvos
   name: string;
-  value: number;
+  risco: Risco;
+  [key: string]: any; // Permite campos dinâmicos para os meses (jan, fev, etc.)
 }
 
 interface PhysicalInputModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSaveSuccess: () => void;
-  capexItem: { capex: string; label: string; };
-  targetTotal: number;
+  onSave: () => void; // Renomeado de onSaveSuccess para clareza
+  capexLabel: string | null;
+  financialValue: number; // Renomeado de targetTotal
 }
 
-const formatNumber = (num: number) => new Intl.NumberFormat("pt-BR", { style: 'currency', currency: 'BRL' }).format(num);
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value);
+};
 
-export function PhysicalInputModal({ isOpen, onClose, onSaveSuccess, capexItem, targetTotal }: PhysicalInputModalProps) {
-  const [items, setItems] = useState<Item[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+export function PhysicalInputModal({
+  isOpen,
+  onClose,
+  onSave,
+  capexLabel,
+  financialValue,
+}: PhysicalInputModalProps) {
+  const [items, setItems] = useState<PhysicalItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Efeito para buscar os dados quando o modal abre
   useEffect(() => {
-    if (!isOpen) return;
-    
-    const fetchInputs = async () => {
+    if (isOpen && capexLabel) {
       setIsLoading(true);
-      try {
-        const res = await fetch(`/api/capex/physical-inputs?capex=${encodeURIComponent(capexItem.capex)}`);
-        if (!res.ok) throw new Error('Falha ao buscar dados');
-        const data = await res.json();
-        setItems(data.map((d: any) => ({ ...d, id: d.id || `temp_${Math.random()}` })));
-      } catch (error) {
-        console.error(error);
-        setItems([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchInputs();
-  }, [isOpen, capexItem.capex]);
-
-  const totalDosFisicos = useMemo(() => items.reduce((sum, item) => sum + (Number(item.value) || 0), 0), [items]);
-  const totalsMatch = useMemo(() => Math.abs(totalDosFisicos - targetTotal) < 0.01, [totalDosFisicos, targetTotal]);
-
-  const handleItemChange = (index: number, field: 'name' | 'value', fieldValue: string) => {
-    const newItems = [...items];
-    if (field === 'value') {
-      newItems[index][field] = parseFloat(fieldValue) || 0;
+      // Usamos encodeURIComponent para garantir que caracteres especiais no label não quebrem a URL
+      fetch(`/api/capex/physical-inputs?capexLabel=${encodeURIComponent(capexLabel)}`)
+        .then((res) => {
+            if (!res.ok) throw new Error('Falha ao buscar dados');
+            return res.json();
+        })
+        .then((data) => {
+          if (Array.isArray(data)) {
+            // Converte o ID para string para consistência no estado
+            setItems(data.map(d => ({ ...d, id: d.id.toString() })));
+          }
+        })
+        .catch(() => toast.error('Erro ao carregar os dados físicos existentes.'))
+        .finally(() => setIsLoading(false));
     } else {
-      newItems[index][field] = fieldValue;
+      // Limpa o estado quando o modal é fechado para não mostrar dados antigos
+      setItems([]);
     }
-    setItems(newItems);
-  };
+  }, [isOpen, capexLabel]);
+
+  // Calcula o total dos físicos somando todos os meses de todos os itens
+  const totalPhysicalValue = useMemo(() => {
+    return items.reduce((total, item) => {
+      const itemTotal = MONTHS.reduce((itemSum, month) => itemSum + Number(item[month] || 0), 0);
+      return total + itemTotal;
+    }, 0);
+  }, [items]);
 
   const handleAddItem = () => {
-    setItems([...items, { id: `temp_${Date.now()}`, name: '', value: 0 }]);
+    setItems([
+      ...items,
+      {
+        id: `new-${Date.now()}`, // ID temporário para novos itens
+        name: '',
+        risco: 'BAIXO',
+        ...MONTHS.reduce((acc, month) => ({ ...acc, [month]: 0 }), {}), // Inicializa todos os meses com 0
+      },
+    ]);
   };
 
-  const handleRemoveItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index));
+  const handleRemoveItem = (id: number | string) => {
+    setItems(items.filter((item) => item.id !== id));
   };
 
+  const handleItemChange = (id: number | string, field: string, value: string | number) => {
+    setItems(
+      items.map((item) =>
+        item.id === id ? { ...item, [field]: value } : item
+      )
+    );
+  };
+  
   const handleSave = async () => {
-    if (!totalsMatch) {
-      alert("Os totais devem ser idênticos para salvar.");
+    if (!capexLabel) return;
+    setIsLoading(true);
+
+    // Validação simples para garantir que todos os itens tenham nome
+    if (items.some(item => !item.name.trim())) {
+      toast.error("Todos os itens devem ter um nome.");
+      setIsLoading(false);
       return;
     }
-    setIsSaving(true);
+
     try {
-      const res = await fetch('/api/capex/physical-inputs', {
+      const response = await fetch('/api/capex/physical-inputs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          capex: capexItem.capex,
-          inputs: items.map(({ name, value }) => ({ name, value })),
-          targetTotal: targetTotal,
-        }),
+        // Envia o corpo no formato que a nova API espera
+        body: JSON.stringify({ capexLabel, items }),
       });
 
-      if (!res.ok) throw new Error('Falha ao salvar os dados.');
-      
-      onSaveSuccess();
+      if (!response.ok) {
+        throw new Error('Falha ao salvar os dados. Verifique o console do servidor.');
+      }
+
+      toast.success('Detalhamento físico salvo com sucesso!');
+      onSave(); // Notifica o componente pai para recarregar os dados
       onClose();
     } catch (error) {
-      console.error(error);
-      alert("Ocorreu um erro ao salvar. Tente novamente.");
+      toast.error((error as Error).message);
     } finally {
-      setIsSaving(false);
+      setIsLoading(false);
     }
   };
 
-  if (!isOpen) return null;
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !capexLabel) return;
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('capexLabel', capexLabel);
+
+    try {
+        const response = await fetch('/api/capex/physical-inputs/upload', {
+            method: 'POST',
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Falha no upload do arquivo.');
+        }
+
+        const result = await response.json();
+        toast.success(`${result.importedCount} itens importados com sucesso!`);
+        onSave();
+        onClose();
+
+    } catch (error) {
+        toast.error((error as Error).message);
+    } finally {
+        setIsUploading(false);
+        if(fileInputRef.current) {
+            fileInputRef.current.value = ""; // Reseta o input para permitir re-upload do mesmo arquivo
+        }
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="relative bg-white w-full max-w-2xl rounded-lg border shadow-lg overflow-hidden animate-in fade-in-0 zoom-in-95">
-        <div className="flex items-start justify-between p-4 border-b">
-          <div>
-            <h3 className="text-lg font-semibold text-slate-800">Detalhamento Físico</h3>
-            <p className="text-sm text-slate-500">{capexItem.label}</p>
-          </div>
-          <button onClick={onClose} className="p-1 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600">
-            <X size={20} />
-          </button>
-        </div>
-        
-        <div className="p-6 max-h-[60vh] overflow-y-auto">
-          <div className="grid grid-cols-[1fr_150px_auto] gap-x-4 items-center mb-2 px-2">
-            <label className="text-xs font-medium text-slate-500">Nome do Físico</label>
-            <label className="text-xs font-medium text-slate-500">Valor (R$)</label>
-            <label className="text-xs font-medium text-slate-500">Ação</label>
-          </div>
-          {isLoading ? (
-            <p className="text-sm text-slate-500 text-center py-4">Carregando...</p>
-          ) : (
-            <div className="space-y-2">
-              {items.map((item, index) => (
-                <div key={item.id} className="grid grid-cols-[1fr_150px_auto] gap-x-4 items-center">
-                  <input
-                    type="text"
-                    value={item.name}
-                    onChange={(e) => handleItemChange(index, 'name', e.target.value)}
-                    className="w-full border rounded px-2 py-1.5 text-sm"
-                    placeholder="Ex: Transformador"
-                  />
-                  <input
-                    type="number"
-                    value={item.value || ''}
-                    onChange={(e) => handleItemChange(index, 'value', e.target.value)}
-                    className="w-full border rounded px-2 py-1.5 text-sm text-right"
-                    placeholder="0"
-                  />
-                  <button onClick={() => handleRemoveItem(index)} className="p-2 text-red-500 hover:bg-red-50 rounded-md">
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          <button onClick={handleAddItem} className="mt-4 flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-800">
-            <Plus size={16} /> Adicionar Item
-          </button>
-        </div>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-7xl h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Detalhamento Físico - {capexLabel}</DialogTitle>
+        </DialogHeader>
 
-        <div className="p-6 border-t bg-slate-50 space-y-3">
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-slate-600">Total dos Físicos:</span>
-            <span className="font-semibold text-slate-800">{formatNumber(totalDosFisicos)}</span>
-          </div>
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-slate-600">Valor Alvo (Financeiro):</span>
-            <span className="font-semibold text-slate-800">{formatNumber(targetTotal)}</span>
+        {/* Corpo rolável do modal */}
+        <div className="flex-grow overflow-y-auto pr-4">
+          <div className="flex justify-between items-center mb-4">
+             <Button variant="outline" size="sm" onClick={handleAddItem}>
+                <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Item
+            </Button>
+            <div className='flex items-center gap-2'>
+              <a href="/templates/template-fisicos.xlsx" download>
+                  <Button variant="outline" size="sm">
+                      <Download className="mr-2 h-4 w-4" /> Baixar Template
+                  </Button>
+              </a>
+              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
+                  {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                  Importar Excel
+              </Button>
+              <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".xlsx, .xls" className="hidden" />
+            </div>
           </div>
           
-          {!totalsMatch && items.length > 0 && (
-             <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-100 p-2 rounded-md border border-amber-200">
-                <p><strong>Atenção:</strong> Os totais devem ser idênticos para salvar.</p>
+          <div className="border rounded-md">
+            <Table>
+              <TableHeader className="sticky top-0 bg-slate-50 z-10">
+                <TableRow>
+                  <TableHead className="min-w-[250px]">Nome do Físico</TableHead>
+                  <TableHead className="min-w-[150px]">Risco Realização</TableHead>
+                  {MONTHS.map(m => <TableHead key={m} className="min-w-[120px] capitalize text-right">{m}</TableHead>)}
+                  <TableHead className="w-[50px] text-center">Ação</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                    <TableRow><TableCell colSpan={15} className='h-24 text-center'><Loader2 className='mx-auto animate-spin text-slate-500'/></TableCell></TableRow>
+                ) : items.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <Input
+                        value={item.name}
+                        onChange={(e) => handleItemChange(item.id, 'name', e.target.value)}
+                        className="h-8"
+                      />
+                    </TableCell>
+                    <TableCell>
+                       <Select
+                          value={item.risco}
+                          onValueChange={(value: Risco) => handleItemChange(item.id, 'risco', value)}
+                        >
+                          <SelectTrigger className="h-8">
+                            <SelectValue placeholder="Selecione..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="BAIXO">Baixo</SelectItem>
+                            <SelectItem value="MEDIO">Médio</SelectItem>
+                            <SelectItem value="ALTO">Alto</SelectItem>
+                          </SelectContent>
+                        </Select>
+                    </TableCell>
+                    {MONTHS.map(m => (
+                       <TableCell key={m}>
+                         <Input
+                           type="number"
+                           value={item[m] || 0}
+                           onChange={(e) => handleItemChange(item.id, m, parseFloat(e.target.value) || 0)}
+                           className="h-8 text-right"
+                         />
+                       </TableCell>
+                    ))}
+                    <TableCell className="text-center">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveItem(item.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+        
+        {/* Rodapé fixo */}
+        <DialogFooter className="mt-4 pt-4 border-t flex-shrink-0">
+          <div className="w-full flex justify-between items-center">
+             <div className="text-sm space-y-1">
+                <p>Total dos Físicos: <span className="font-bold text-slate-800">{formatCurrency(totalPhysicalValue)}</span></p>
+                <p>Valor Alvo (Financeiro): <span className="font-bold text-slate-800">{formatCurrency(financialValue)}</span></p>
              </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end p-4 border-t gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border rounded-md hover:bg-slate-50">
-            Cancelar
-          </button>
-          <button 
-            onClick={handleSave} 
-            disabled={!totalsMatch || isSaving}
-            className="px-6 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 disabled:bg-slate-400 disabled:cursor-not-allowed"
-          >
-            {isSaving ? "Salvando..." : "Salvar Físicos"}
-          </button>
-        </div>
-      </div>
-    </div>
+             <div>
+                <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+                <Button onClick={handleSave} disabled={isLoading || isUploading}>
+                    {isLoading || isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Salvar Físicos'}
+                </Button>
+             </div>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

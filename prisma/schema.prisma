@@ -14,7 +14,6 @@ enum CapexStatus {
   FINALIZADO
 }
 
-// >>> ADICIONADO: Novo enum para o status físico
 enum PhysicalStatus {
   SIM
   NAO
@@ -39,10 +38,7 @@ model CapexWeb {
   ordem          Int            @default(0)
   meta           Decimal?       @db.Decimal(18, 2)
   status_capex   CapexStatus    @default(PENDENTE)
-  
-  // >>> ADICIONADO: Nova coluna para o status físico
   status_fisico  PhysicalStatus @default(PENDENTE)
-
   transfersFrom  Transfer[]     @relation("TransfersFrom")
   transfersTo    Transfer[]     @relation("TransfersTo")
   physicalInputs PhysicalInput[]
@@ -51,17 +47,36 @@ model CapexWeb {
 }
 
 model PhysicalInput {
-  id            Int      @id @default(autoincrement())
-  name          String
-  value         Decimal  @db.Decimal(18, 2)
-  month         Int?
-  capexWebCapex String   @db.VarChar(50)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  capexWeb      CapexWeb @relation(fields: [capexWebCapex], references: [capex], onDelete: Cascade)
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  name      String
+  risco     RiscoRealizacao @default(BAIXO)
+  jan       Decimal  @default(0) @db.Decimal(18, 2)
+  fev       Decimal  @default(0) @db.Decimal(18, 2)
+  mar       Decimal  @default(0) @db.Decimal(18, 2)
+  abr       Decimal  @default(0) @db.Decimal(18, 2)
+  mai       Decimal  @default(0) @db.Decimal(18, 2)
+  jun       Decimal  @default(0) @db.Decimal(18, 2)
+  jul       Decimal  @default(0) @db.Decimal(18, 2)
+  ago       Decimal  @default(0) @db.Decimal(18, 2)
+  set       Decimal  @default(0) @db.Decimal(18, 2)
+  out       Decimal  @default(0) @db.Decimal(18, 2)
+  nov       Decimal  @default(0) @db.Decimal(18, 2)
+  dez       Decimal  @default(0) @db.Decimal(18, 2)
 
-  @@index([capexWebCapex])
-  @@map("physical_inputs")
+  // =================================================================
+  // AQUI ESTÁ A CORREÇÃO PRINCIPAL
+  // =================================================================
+  // O relacionamento agora aponta para o campo `capex` (String) do modelo CapexWeb.
+  capex       CapexWeb @relation(fields: [capexLabel], references: [capex], onDelete: Cascade)
+  // O campo da chave estrangeira foi renomeado para `capexLabel` e seu tipo mudado para `String`.
+  // Adicionei `@db.VarChar(50)` para garantir que o tipo no banco seja compatível.
+  capexLabel  String   @db.VarChar(50)
+
+  // O índice unique foi atualizado para usar o novo nome do campo.
+  @@unique([name, capexLabel])
+  // =================================================================
 }
 
 model Transfer {
@@ -146,17 +161,17 @@ model PermissionRequest {
 }
 
 model User {
-  id                  String             @id @default(cuid())
-  email               String             @unique
+  id                  String              @id @default(cuid())
+  email               String              @unique
   name                String?
   passwordHash        String?
-  role                UserRole           @default(USER)
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  role                UserRole            @default(USER)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
   capexPermissions    CapexPermission[]
   passwordResetTokens PasswordResetToken[]
-  requestsDecided     PermissionRequest[]  @relation("RequestsDecided")
-  requestsMade        PermissionRequest[]  @relation("RequestsMade")
+  requestsDecided     PermissionRequest[] @relation("RequestsDecided")
+  requestsMade        PermissionRequest[] @relation("RequestsMade")
 
   @@map("user")
 }
@@ -188,4 +203,10 @@ enum UserRole {
   USER
   EDITOR
   ADMIN
+}
+
+enum RiscoRealizacao {
+  BAIXO
+  MEDIO
+  ALTO
 }
