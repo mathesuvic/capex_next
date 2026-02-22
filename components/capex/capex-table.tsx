@@ -4,11 +4,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { ChevronDown, CheckCircle2, AlertCircle, CircleDot, Database, XCircle } from "lucide-react";
-// MUDANÇA 1: O nome do componente do Modal foi corrigido para bater com o nome do arquivo que criamos
 import { PhysicalInputModal } from './physical-input-modal';
 import { normalizeLabel } from "@/lib/utils";
 
-// Tipagens e Funções Helper (sem alterações aqui)
+// Tipagens e Funções Helper (sem alterações)
 type CapexStatus = 'PENDENTE' | 'FINALIZADO' | 'PARCIAL';
 type PhysicalStatus = 'SIM' | 'NAO' | 'PENDENTE';
 interface RowData { id: number | string; label: string; capex: string; sublevel?: number; color?: string; cells: CellData[]; computed?: boolean; meta?: number; transfers?: TransferEntry[]; transferNet?: number; status_capex?: CapexStatus; status_fisico?: PhysicalStatus; }
@@ -20,7 +19,6 @@ function calculateTotal(rowCells: CellData[]) { return rowCells.reduce((sum, c) 
 const formatNumber = (num: number) => new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(num);
 const formatSigned = (n: number) => `${n > 0 ? "+" : ""}${formatNumber(n)}`;
 const sumOutgoing = (row: RowData) => (row.transfers ?? []).reduce((s, t) => s + (Number.isFinite(t.amount) ? t.amount : 0), 0);
-// ... (O resto das funções helper complexas permanecem as mesmas) ...
 function buildIncomingIndex(rows: RowData[]) {
   const sublabels = new Set(rows.filter((r) => r.sublevel === 1).map((r) => r.label));
   const temp: Record<string, Record<string, number>> = {};
@@ -29,7 +27,6 @@ function buildIncomingIndex(rows: RowData[]) {
   Object.entries(temp).forEach(([dest, byFrom]) => { result[dest] = Object.entries(byFrom).map(([from, amount]) => ({ from, amount })); });
   return result;
 }
-
 function computeDisplay(rows: RowData[], editableMonths: Set<number>) {
   const res = rows.map((r) => ({ ...r, cells: r.cells.map((c) => ({ ...c })) }));
   const subIndex = new Map<string, number>();
@@ -62,7 +59,6 @@ function computeDisplay(rows: RowData[], editableMonths: Set<number>) {
   }
   return res;
 }
-
 function buildTransferMatrix(rows: RowData[]) {
   const labels = rows.filter((r) => r.sublevel === 1).map((r) => r.label);
   const idxMap = new Map(labels.map((l, i) => [l, i] as const));
@@ -74,19 +70,17 @@ function buildTransferMatrix(rows: RowData[]) {
   const max = matrix.reduce((m, row) => Math.max(m, ...row), 0);
   return { labels, matrix, outgoing, incoming, net, max };
 }
-
 function heatClass(v: number, max: number) { if (v <= 0 || max <= 0) return "bg-white"; const q = v / max; if (q > 0.8) return "bg-emerald-400/60"; if (q > 0.6) return "bg-emerald-300/60"; if (q > 0.4) return "bg-emerald-200/60"; if (q > 0.2) return "bg-emerald-100/60"; return "bg-emerald-50"; }
-
 type PermissionsResponse = | { isAdmin: true; allowedLabels: "ALL" } | { isAdmin: false; allowedLabels: string[] };
 
 
 // =======================================================================
-// MUDANÇA 2: Atualizamos o estado do modal para usar `editableMonths`
+// CORREÇÃO 1: Interface do estado do modal foi renomeada para clareza
 // =======================================================================
 interface ModalState {
   isOpen: boolean;
   capexItem: { capex: string; label: string; };
-  editableMonths: { [month: string]: number }; // Trocamos `targetTotal` por esta prop
+  financialDataForModal: Record<string, number>; // Antes: editableMonths
 }
 // =======================================================================
 
@@ -104,7 +98,6 @@ export function CapexTable() {
   const [isLoading, setIsLoading] = useState(true);
   const [expandedPlans, setExpandedPlans] = useState<Set<string>>(new Set());
   
-  // O estado do modal agora usa a nova interface `ModalState`
   const [physicalInputModal, setPhysicalInputModal] = useState<ModalState | null>(null);
 
   const fetchData = async (controller: AbortController) => {
@@ -131,7 +124,6 @@ export function CapexTable() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ... (useEffect para permissões não muda)
   useEffect(() => {
     const controller = new AbortController();
     (async () => {
@@ -145,7 +137,6 @@ export function CapexTable() {
     })();
     return () => { controller.abort(); };
   }, []);
-
 
   const subplans = useMemo(() => data.filter((r) => r.sublevel === 1).map((r) => ({ label: r.label, id: r.id })), [data]);
   const sublevelOptions = subplans.map((s) => s.label);
@@ -166,40 +157,38 @@ export function CapexTable() {
   }, [displayData, expandedPlans, isLoading]);
   const canEditRowLabel = (row: RowData) => { if (isAdmin) return true; return allowedLabels.has(normalizeLabel(row.label)); };
 
-  
   // =======================================================================
-  // MUDANÇA 3: Adicionamos a função helper para preparar os dados para o modal
+  // CORREÇÃO 2: A função helper agora pega TODOS os meses editáveis, mesmo que o valor seja 0
   // =======================================================================
-  const getEditableMonthsData = (row: RowData): { [month: string]: number } => {
-    const data: { [month: string]: number } = {};
+  const getFinancialDataForEditableMonths = (row: RowData): Record<string, number> => {
+    const data: Record<string, number> = {};
     row.cells.forEach((cell, index) => {
+      // Verifica se o ÍNDICE do mês está no Set de meses editáveis
+      if (editableMonths.has(index)) {
         const monthName = MONTHS[index];
-        const value = typeof cell.value === 'number' ? cell.value : 0;
-        // Incluímos apenas meses com valor > 0, como solicitado, para não poluir o modal.
-        if (value > 0) {
-            data[monthName] = value;
-        }
+        data[monthName] = typeof cell.value === 'number' ? cell.value : 0;
+      }
     });
     return data;
   };
 
   // =======================================================================
-  // MUDANÇA 4: A função de abrir o modal agora usa a nova lógica
+  // CORREÇÃO 3: A função de abrir o modal foi atualizada para a nova lógica
   // =======================================================================
   const openPhysicalInputModal = (row: RowData) => {
     if (row.sublevel !== 1 || !canEditRowLabel(row)) return;
 
-    // Usamos nossa nova função para pegar apenas os meses com valores
-    const monthsData = getEditableMonthsData(row);
+    // Usamos a função corrigida para pegar os dados financeiros SOMENTE dos meses editáveis
+    const financialData = getFinancialDataForEditableMonths(row);
     
     setPhysicalInputModal({
       isOpen: true,
       capexItem: { capex: row.capex, label: row.label },
-      editableMonths: monthsData, // Passamos o objeto com os meses e seus valores
+      financialDataForModal: financialData, // Armazena os dados no estado
     });
   };
   
-  // ... (o resto das funções de handle, add, remove, save, etc., não mudam) ...
+  // (O resto das funções de handle, add, remove, save, etc., não mudam)
   const handleToggleStatus = async (rowToUpdate: RowData) => {
     const originalStatus = rowToUpdate.status_capex || 'PENDENTE';
     const newStatus = originalStatus === 'FINALIZADO' ? 'PENDENTE' : 'FINALIZADO';
@@ -332,7 +321,7 @@ export function CapexTable() {
   return (
     <>
       <Card className="overflow-hidden border border-slate-200 shadow-lg">
-        {/* ... (O JSX do cabeçalho da tabela e do mapa de transferências não muda) ... */}
+        {/* O JSX do cabeçalho da tabela e do mapa de transferências não muda */}
         <div className="flex items-center justify-between px-4 py-3 border-b bg-white">
           <h3 className="text-sm font-semibold text-slate-800">CAPEX (R$ Mil)</h3>
           <div className="flex items-center gap-4">
@@ -377,7 +366,6 @@ export function CapexTable() {
                   const isExpanded = isPlano && expandedPlans.has(row.label);
 
                   return (
-                    // O JSX para renderizar as linhas da tabela permanece o mesmo
                     <tr key={row.capex} className={`${row.color || (isSubLevel ? "bg-white" : "bg-slate-50")} border-b border-slate-200 hover:bg-slate-50 transition-colors`}>
                       <td className={`sticky left-0 z-10 border border-slate-200 px-4 py-3 font-medium ${row.color || (isSubLevel ? "bg-white" : "bg-slate-50")} ${isSubLevel ? "pl-8 text-slate-700" : "text-slate-900"}`}>
                         <div className="flex items-center gap-2">
@@ -508,7 +496,7 @@ export function CapexTable() {
           <p className="text-sm text-slate-600"><span className="inline-block w-3 h-3 bg-[#e6f7f0] border border-[#00823B] rounded mr-2"></span>Valores em <strong>verde</strong> são meses marcados como <strong>editáveis/previstos</strong>.</p>
           <p className="text-sm text-slate-600"><span className="inline-block w-3 h-3 bg-indigo-50 border border-indigo-200 rounded mr-2"></span><strong>Transferência (líquida)</strong> = entradas − saídas. <strong>Saldo a Distribuir</strong> = META − MELHOR VISÃO + Transferência.</p>
         </div>
-        {/* ... (O JSX do mapa de transferências não muda) ... */}
+        {/* O JSX do mapa de transferências não muda */}
         {mapOpen && !isLoading && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/40" onClick={() => setMapOpen(false)} />
@@ -539,7 +527,7 @@ export function CapexTable() {
       </Card>
       
       {/* ======================================================================= */}
-      {/* MUDANÇA 5: A chamada do modal foi completamente reescrita para usar as novas props */}
+      {/* CORREÇÃO 4: A chamada do modal foi atualizada para passar as props corretas */}
       {/* ======================================================================= */}
       {physicalInputModal && physicalInputModal.isOpen && ( 
         <PhysicalInputModal 
@@ -547,13 +535,14 @@ export function CapexTable() {
           onClose={() => setPhysicalInputModal(null)} 
           onSave={() => {
             setPhysicalInputModal(null);
-            // Re-busca os dados da tabela principal para refletir o novo status
+            // Re-busca os dados da tabela principal para refletir o novo status do físico
             const controller = new AbortController();
             fetchData(controller);
           }}
-          // Passando as props corretas para o novo modal
+          // Passando as props corretas para o novo modal:
           capexLabel={physicalInputModal.capexItem.label}
-          editableMonths={physicalInputModal.editableMonths}
+          editableMonths={Object.keys(physicalInputModal.financialDataForModal)} // Prop 1: um array com os nomes dos meses
+          financialData={physicalInputModal.financialDataForModal} // Prop 2: o objeto com os valores financeiros
         /> 
       )}
     </>

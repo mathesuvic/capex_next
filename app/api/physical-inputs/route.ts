@@ -1,52 +1,70 @@
-// app/api/physical-inputs/route.ts
+// app/api/capex/physical-inputs/route.ts
 
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 
-// >>> ALTERADO: Schema de busca agora só precisa do CAPEX. O mês foi removido.
-const GetSchema = z.object({
-  capex: z.string().min(1, "O CAPEX é obrigatório."),
+// Schema para um único item físico, usado no POST
+const PhysicalItemSchema = z.object({
+  id: z.union([z.string(), z.number()]),
+  name: z.string().min(1, "O nome do físico não pode ser vazio."),
+  risco: z.enum(['BAIXO', 'MEDIO', 'ALTO']),
+  jan: z.number().optional().default(0),
+  fev: z.number().optional().default(0),
+  mar: z.number().optional().default(0),
+  abr: z.number().optional().default(0),
+  mai: z.number().optional().default(0),
+  jun: z.number().optional().default(0),
+  jul: z.number().optional().default(0),
+  ago: z.number().optional().default(0),
+  set: z.number().optional().default(0),
+  out: z.number().optional().default(0),
+  nov: z.number().optional().default(0),
+  dez: z.number().optional().default(0),
 });
 
-// >>> ALTERADO: Schema de salvamento agora só precisa do CAPEX e dos itens.
-// O mês e o totalValue foram removidos, pois a API não lida mais com isso.
+// Schema para o corpo da requisição POST
 const PostSchema = z.object({
-  capex: z.string().min(1),
-  items: z.array(z.object({
-    name: z.string().min(1, "O nome do físico não pode ser vazio."),
-    value: z.number().positive("O valor deve ser maior que zero."),
-  })),
+  // =================================================================
+  // CORREÇÃO 2: A validação do Zod agora espera 'capexLabel'
+  // =================================================================
+  capexLabel: z.string().min(1),
+  items: z.array(PhysicalItemSchema),
 });
 
 /**
- * Função GET: Busca TODOS os físicos para um determinado subplano (capex),
- * independentemente do mês.
+ * GET: Busca todos os físicos para um determinado CAPEX.
  */
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const validation = GetSchema.safeParse({
-      capex: searchParams.get('capex'),
-    });
+    // =================================================================
+    // CORREÇÃO 1: O parâmetro na URL agora é lido como 'capexLabel'
+    // =================================================================
+    const capexLabel = searchParams.get('capexLabel');
 
-    if (!validation.success) {
-      return NextResponse.json({ error: 'Parâmetros inválidos.', details: validation.error.format() }, { status: 400 });
+    if (!capexLabel) {
+      return NextResponse.json({ error: 'O parâmetro capexLabel é obrigatório.' }, { status: 400 });
     }
 
-    const { capex } = validation.data;
-
-    // >>> ALTERADO: A busca no banco não filtra mais por 'month'.
     const physicalInputs = await prisma.physicalInput.findMany({
-      where: {
-        capexWebCapex: capex,
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
+      where: { capexLabel },
+      orderBy: { createdAt: 'asc' },
     });
 
-    return NextResponse.json(physicalInputs);
+    // Converte os campos Decimal do Prisma para number para o frontend
+    const plainObjects = physicalInputs.map(item => {
+        const newItem: Record<string, any> = { ...item };
+        for (const key in newItem) {
+            if (newItem[key] instanceof Prisma.Decimal) {
+                newItem[key] = newItem[key].toNumber();
+            }
+        }
+        return newItem;
+    });
+
+    return NextResponse.json(plainObjects);
 
   } catch (error) {
     console.error("Erro ao buscar físicos:", error);
@@ -55,9 +73,7 @@ export async function GET(request: Request) {
 }
 
 /**
- * Função POST: Salva (sobrescreve) a lista de físicos para um subplano.
- * ATENÇÃO: Esta função NÃO atualiza mais a tabela financeira 'capex_web'.
- * Ela apenas salva o detalhamento na tabela 'physical_inputs'.
+ * POST: Sincroniza (cria, atualiza, deleta) a lista de físicos para um CAPEX.
  */
 export async function POST(request: Request) {
   try {
@@ -68,39 +84,61 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Dados inválidos.', details: validation.error.format() }, { status: 400 });
     }
 
-    // >>> ALTERADO: Não recebemos mais 'month' nem 'totalValue' do frontend.
-    const { capex, items } = validation.data;
-    
-    // >>> REMOVIDO: Toda a lógica de mapeamento de mês para coluna de banco foi removida.
-    
-    await prisma.$transaction(async (tx) => {
-      // 1. Deleta todos os físicos antigos para este capex (sem filtro de mês).
-      await tx.physicalInput.deleteMany({
-        where: {
-          capexWebCapex: capex,
-        },
-      });
+    // A validação agora retorna 'capexLabel'
+    const { capexLabel, items } = validation.data;
 
-      // 2. Cria os novos físicos se a lista não estiver vazia.
-      if (items.length > 0) {
+    const incomingIds = items
+      .map(item => typeof item.id === 'number' ? item.id : null)
+      .filter((id): id is number => id !== null);
+
+    await prisma.$transaction(async (tx) => {
+      const existingItems = await tx.physicalInput.findMany({
+        where: { capexLabel },
+        select: { id: true },
+      });
+      const existingIds = existingItems.map(item => item.id);
+      const idsToDelete = existingIds.filter(id => !incomingIds.includes(id));
+      
+      if (idsToDelete.length > 0) {
+        await tx.physicalInput.deleteMany({
+          where: { id: { in: idsToDelete } },
+        });
+      }
+
+      const itemsToCreate = items.filter(item => typeof item.id === 'string');
+      const itemsToUpdate = items.filter((item): item is (typeof items[0] & { id: number }) => typeof item.id === 'number');
+
+      if (itemsToCreate.length > 0) {
         await tx.physicalInput.createMany({
-          data: items.map(item => ({
-            name: item.name,
-            value: item.value,
-            capexWebCapex: capex,
-            // >>> ALTERADO: O campo 'month' não é mais fornecido, pois o schema o tornou opcional.
+          data: itemsToCreate.map(({ id, ...rest }) => ({
+            ...rest,
+            capexLabel: capexLabel,
           })),
         });
       }
 
-      // >>> REMOVIDO: A etapa 3, que atualizava a tabela 'capex_web', foi completamente removida.
-      // A API não tem mais essa responsabilidade.
+      for (const item of itemsToUpdate) {
+        await tx.physicalInput.update({
+          where: { id: item.id },
+          data: {
+            name: item.name,
+            risco: item.risco,
+            jan: item.jan, fev: item.fev, mar: item.mar,
+            abr: item.abr, mai: item.mai, jun: item.jun,
+            jul: item.jul, ago: item.ago, set: item.set,
+            out: item.out, nov: item.nov, dez: item.dez,
+          },
+        });
+      }
     });
 
     return NextResponse.json({ message: 'Detalhamento físico salvo com sucesso.' }, { status: 200 });
 
   } catch (error) {
     console.error("Erro ao salvar físicos:", error);
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+         return NextResponse.json({ error: 'Erro: Já existe um item com o mesmo nome para este CAPEX.' }, { status: 409 });
+    }
     return NextResponse.json({ error: 'Erro interno do servidor.' }, { status: 500 });
   }
 }
