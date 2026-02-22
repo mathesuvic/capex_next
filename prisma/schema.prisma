@@ -42,23 +42,25 @@ model CapexWeb {
   @@map("capex_web")
 }
 
-// >>> ADICIONADO: Nova tabela para armazenar os Inputs Físicos <<<
+
+// Descomente o modelo para recriá-lo corretamente
+
 model PhysicalInput {
-  id           Int      @id @default(autoincrement())
-  name         String   // Nome do físico, ex: "Transformador 500kVA"
-  value        Decimal  @db.Decimal(18, 2) // Valor do físico
-  month        Int      // Mês de referência (1 para Jan, 2 para Fev, etc.)
+  id            Int      @id @default(autoincrement())
+  name          String
+  value         Decimal  @db.Decimal(18, 2)
+  month         Int?
   capexWebCapex String   @db.VarChar(50)
   
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  // Relação com a tabela CapexWeb
-  capexWeb     CapexWeb @relation(fields: [capexWebCapex], references: [capex], onDelete: Cascade)
+  capexWeb      CapexWeb @relation(fields: [capexWebCapex], references: [capex], onDelete: Cascade)
 
-  @@index([capexWebCapex, month]) // Index para buscas rápidas
-  @@map("physical_inputs") // Define o nome da tabela no banco
+  @@index([capexWebCapex])
+  @@map("physical_inputs")
 }
+
 
 
 model Transfer {

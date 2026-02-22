@@ -4,80 +4,37 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { ChevronDown, CheckCircle2, AlertCircle, CircleDot, Database } from "lucide-react";
-
-// >>> NOVO: Importação do nosso modal de físicos
 import { PhysicalInputModal } from './physical-input-modal';
 
-// Tipagens e Funções Helper (sem alterações)
+// Tipagens e Funções Helper
 type CapexStatus = 'PENDENTE' | 'FINALIZADO' | 'PARCIAL';
-interface RowData {
-  id: number | string;
-  label: string;
-  capex: string;
-  sublevel?: number;
-  color?: string;
-  cells: CellData[];
-  computed?: boolean;
-  meta?: number;
-  transfers?: TransferEntry[];
-  transferNet?: number;
-  status_capex?: CapexStatus;
-}
-interface CellData {
-  value: number | string;
-  type: "realizado" | "previsto";
-}
-interface TransferEntry {
-  id?: number | string;
-  amount: number;
-  to?: string;
-  toId?: number;
-}
+interface RowData { id: number | string; label: string; capex: string; sublevel?: number; color?: string; cells: CellData[]; computed?: boolean; meta?: number; transfers?: TransferEntry[]; transferNet?: number; status_capex?: CapexStatus; }
+interface CellData { value: number | string; type: "realizado" | "previsto"; }
+interface TransferEntry { id?: number | string; amount: number; to?: string; toId?: number; }
 const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-const parseEnvEditableMonths = () =>
-  (process.env.NEXT_PUBLIC_CAPEX_EDITABLE_MONTHS ?? "9,10,11,12")
-    .split(",")
-    .map((s) => parseInt(s.trim(), 10) - 1)
-    .filter((m) => Number.isFinite(m) && m >= 0 && m < 12);
-function calculateTotal(rowCells: CellData[]) {
-  return rowCells.reduce((sum, c) => sum + (typeof c.value === "number" ? c.value : 0), 0);
-}
+const parseEnvEditableMonths = () => (process.env.NEXT_PUBLIC_CAPEX_EDITABLE_MONTHS ?? "9,10,11,12").split(",").map((s) => parseInt(s.trim(), 10) - 1).filter((m) => Number.isFinite(m) && m >= 0 && m < 12);
+function calculateTotal(rowCells: CellData[]) { return rowCells.reduce((sum, c) => sum + (typeof c.value === "number" ? c.value : 0), 0); }
 const formatNumber = (num: number) => new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(num);
 const formatSigned = (n: number) => `${n > 0 ? "+" : ""}${formatNumber(n)}`;
-function normalizeLabel(input: string) {
-  return (input ?? "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
-}
+function normalizeLabel(input: string) { return (input ?? "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase(); }
 const sumOutgoing = (row: RowData) => (row.transfers ?? []).reduce((s, t) => s + (Number.isFinite(t.amount) ? t.amount : 0), 0);
+
 function buildIncomingIndex(rows: RowData[]) {
   const sublabels = new Set(rows.filter((r) => r.sublevel === 1).map((r) => r.label));
   const temp: Record<string, Record<string, number>> = {};
-  rows.forEach((r) => {
-    (r.transfers ?? []).forEach((t) => {
-      if (!t?.to || !Number.isFinite(t.amount)) return;
-      if (!sublabels.has(t.to)) return;
-      temp[t.to] = temp[t.to] || {};
-      temp[t.to][r.label] = (temp[t.to][r.label] || 0) + t.amount;
-    });
-  });
+  rows.forEach((r) => { (r.transfers ?? []).forEach((t) => { if (!t?.to || !Number.isFinite(t.amount)) return; if (!sublabels.has(t.to)) return; temp[t.to] = temp[t.to] || {}; temp[t.to][r.label] = (temp[t.to][r.label] || 0) + t.amount; }); });
   const result: Record<string, { from: string; amount: number }[]> = {};
-  Object.entries(temp).forEach(([dest, byFrom]) => {
-    result[dest] = Object.entries(byFrom).map(([from, amount]) => ({ from, amount }));
-  });
+  Object.entries(temp).forEach(([dest, byFrom]) => { result[dest] = Object.entries(byFrom).map(([from, amount]) => ({ from, amount })); });
   return result;
 }
+
 function computeDisplay(rows: RowData[], editableMonths: Set<number>) {
   const res = rows.map((r) => ({ ...r, cells: r.cells.map((c) => ({ ...c })) }));
   const subIndex = new Map<string, number>();
   res.forEach((r, i) => { if (r.sublevel === 1) subIndex.set(r.label, i); });
   const outgoing = res.map(sumOutgoing);
   const incoming = Array(res.length).fill(0);
-  res.forEach((r) => {
-    (r.transfers ?? []).forEach((t) => {
-      if (!t?.to) return;
-      const idx = subIndex.get(t.to);
-      if (idx !== undefined && Number.isFinite(t.amount)) incoming[idx] += t.amount;
-    });
-  });
+  res.forEach((r) => { (r.transfers ?? []).forEach((t) => { if (!t?.to) return; const idx = subIndex.get(t.to); if (idx !== undefined && Number.isFinite(t.amount)) incoming[idx] += t.amount; }); });
   const net = res.map((_, i) => incoming[i] - outgoing[i]);
   let i = 0;
   while (i < res.length) {
@@ -85,80 +42,46 @@ function computeDisplay(rows: RowData[], editableMonths: Set<number>) {
     if (row.sublevel === undefined) {
       const agg = Array(12).fill(0);
       const monthIsPrevisto = Array(12).fill(false) as boolean[];
-      let metaSum = 0;
-      let netSum = 0;
+      let metaSum = 0; let netSum = 0;
       const childrenStatuses: CapexStatus[] = [];
       let j = i + 1;
       while (j < res.length && res[j].sublevel === 1) {
-        res[j].cells.forEach((cell, idx) => {
-          agg[idx] += typeof cell.value === "number" ? cell.value : 0;
-          if (cell.type === "previsto") monthIsPrevisto[idx] = true;
-        });
-        metaSum += res[j].meta ?? 0;
-        netSum += net[j];
-        res[j] = { ...res[j], transferNet: net[j] };
-        if (res[j].status_capex) {
-          childrenStatuses.push(res[j].status_capex!);
-        }
+        res[j].cells.forEach((cell, idx) => { agg[idx] += typeof cell.value === "number" ? cell.value : 0; if (cell.type === "previsto") monthIsPrevisto[idx] = true; });
+        metaSum += res[j].meta ?? 0; netSum += net[j]; res[j] = { ...res[j], transferNet: net[j] };
+        if (res[j].status_capex) { childrenStatuses.push(res[j].status_capex!); }
         j++;
       }
       let parentStatus: CapexStatus = 'PENDENTE';
-      if (childrenStatuses.length > 0) {
-        if (childrenStatuses.every(s => s === 'FINALIZADO')) {
-          parentStatus = 'FINALIZADO';
-        } else if (childrenStatuses.some(s => s === 'FINALIZADO')) {
-          parentStatus = 'PARCIAL';
-        }
-      }
+      if (childrenStatuses.length > 0) { if (childrenStatuses.every(s => s === 'FINALIZADO')) { parentStatus = 'FINALIZADO'; } else if (childrenStatuses.some(s => s === 'FINALIZADO')) { parentStatus = 'PARCIAL'; } }
       for (let mi = 0; mi < 12; mi++) { if (editableMonths.has(mi)) monthIsPrevisto[mi] = true; }
       res[i] = { ...row, computed: true, meta: metaSum, transferNet: netSum, status_capex: parentStatus, cells: agg.map((v, idx) => ({ value: v, type: monthIsPrevisto[idx] ? ("previsto" as const) : ("realizado" as const), })) };
       i = j;
-    } else {
-      res[i] = { ...res[i], cells: res[i].cells.map((c, idx) => ({ value: c.value, type: editableMonths.has(idx) ? "previsto" : c.type, })) };
-      i++;
-    }
+    } else { res[i] = { ...res[i], cells: res[i].cells.map((c, idx) => ({ value: c.value, type: editableMonths.has(idx) ? "previsto" : c.type, })) }; i++; }
   }
   return res;
 }
+
 function buildTransferMatrix(rows: RowData[]) {
   const labels = rows.filter((r) => r.sublevel === 1).map((r) => r.label);
   const idxMap = new Map(labels.map((l, i) => [l, i] as const));
   const n = labels.length;
   const matrix = Array.from({ length: n }, () => Array(n).fill(0));
-  const outgoing = Array(n).fill(0);
-  const incoming = Array(n).fill(0);
-  rows.forEach((r) => {
-    if (r.sublevel !== 1) return;
-    const fromIdx = idxMap.get(r.label)!;
-    (r.transfers ?? []).forEach((t) => {
-      if (!t?.to || !Number.isFinite(t.amount)) return;
-      const toIdx = idxMap.get(t.to);
-      if (toIdx == null) return;
-      matrix[fromIdx][toIdx] += t.amount;
-      outgoing[fromIdx] += t.amount;
-      incoming[toIdx] += t.amount;
-    });
-  });
+  const outgoing = Array(n).fill(0); const incoming = Array(n).fill(0);
+  rows.forEach((r) => { if (r.sublevel !== 1) return; const fromIdx = idxMap.get(r.label)!; (r.transfers ?? []).forEach((t) => { if (!t?.to || !Number.isFinite(t.amount)) return; const toIdx = idxMap.get(t.to); if (toIdx == null) return; matrix[fromIdx][toIdx] += t.amount; outgoing[fromIdx] += t.amount; incoming[toIdx] += t.amount; }); });
   const net = labels.map((_, i) => incoming[i] - outgoing[i]);
   const max = matrix.reduce((m, row) => Math.max(m, ...row), 0);
   return { labels, matrix, outgoing, incoming, net, max };
 }
-function heatClass(v: number, max: number) {
-  if (v <= 0 || max <= 0) return "bg-white";
-  const q = v / max;
-  if (q > 0.8) return "bg-emerald-400/60";
-  if (q > 0.6) return "bg-emerald-300/60";
-  if (q > 0.4) return "bg-emerald-200/60";
-  if (q > 0.2) return "bg-emerald-100/60";
-  return "bg-emerald-50";
-}
+
+function heatClass(v: number, max: number) { if (v <= 0 || max <= 0) return "bg-white"; const q = v / max; if (q > 0.8) return "bg-emerald-400/60"; if (q > 0.6) return "bg-emerald-300/60"; if (q > 0.4) return "bg-emerald-200/60"; if (q > 0.2) return "bg-emerald-100/60"; return "bg-emerald-50"; }
+
 type PermissionsResponse = | { isAdmin: true; allowedLabels: "ALL" } | { isAdmin: false; allowedLabels: string[] };
 
-// >>> NOVO: Tipagem para controlar o estado do modal
+// >>> CORRIGIDO: A tipagem do estado do modal agora usa 'targetTotal'
 interface ModalState {
   isOpen: boolean;
   capexItem: { capex: string; label: string; };
-  month: { index: number; name: string; };
+  targetTotal: number;
 }
 
 export function CapexTable() {
@@ -173,8 +96,6 @@ export function CapexTable() {
   const [savingState, setSavingState] = useState<{ [rowIndex: number]: boolean }>({});
   const [isLoading, setIsLoading] = useState(true);
   const [expandedPlans, setExpandedPlans] = useState<Set<string>>(new Set());
-
-  // >>> NOVO: Estado para controlar qual modal está aberto
   const [physicalInputModal, setPhysicalInputModal] = useState<ModalState | null>(null);
 
   useEffect(() => {
@@ -187,13 +108,8 @@ export function CapexTable() {
         const json = (await res.json()) as RowData[];
         setData(json);
         setExpandedPlans(new Set(json.filter(r => r.sublevel === undefined).map(r => r.label)));
-      } catch (e) {
-        if ((e as any)?.name !== "AbortError") {
-          console.error(e);
-        }
-      } finally {
-        setIsLoading(false);
-      }
+      } catch (e) { if ((e as any)?.name !== "AbortError") { console.error(e); } } 
+      finally { setIsLoading(false); }
     })();
     return () => { controller.abort(); };
   }, []);
@@ -205,20 +121,9 @@ export function CapexTable() {
         const res = await fetch("/api/me/permissions", { cache: "no-store", signal: controller.signal });
         if (!res.ok) throw new Error("Falha ao buscar /api/me/permissions");
         const json = (await res.json()) as PermissionsResponse;
-        if (json.isAdmin && json.allowedLabels === "ALL") {
-          setIsAdmin(true);
-          setAllowedLabels(new Set());
-        } else {
-          setIsAdmin(false);
-          setAllowedLabels(new Set(json.allowedLabels.map(normalizeLabel)));
-        }
-      } catch (e) {
-        if ((e as any)?.name !== "AbortError") {
-          console.error(e);
-          setIsAdmin(false);
-          setAllowedLabels(new Set());
-        }
-      }
+        if (json.isAdmin && json.allowedLabels === "ALL") { setIsAdmin(true); setAllowedLabels(new Set()); } 
+        else { setIsAdmin(false); setAllowedLabels(new Set(json.allowedLabels.map(normalizeLabel))); }
+      } catch (e) { if ((e as any)?.name !== "AbortError") { console.error(e); setIsAdmin(false); setAllowedLabels(new Set()); } }
     })();
     return () => { controller.abort(); };
   }, []);
@@ -227,83 +132,46 @@ export function CapexTable() {
   const sublevelOptions = subplans.map((s) => s.label);
   const incomingIndex = buildIncomingIndex(data);
   const displayData = useMemo(() => computeDisplay(data, editableMonths), [data, editableMonths]);
-
-  const togglePlanExpansion = (planLabel: string) => {
-    setExpandedPlans(prev => {
-      const next = new Set(prev);
-      if (next.has(planLabel)) { next.delete(planLabel); } else { next.add(planLabel); }
-      return next;
-    });
-  };
-
-  const expandAll = () => {
-    const allPlanLabels = new Set(data.filter(r => r.sublevel === undefined).map(r => r.label));
-    setExpandedPlans(allPlanLabels);
-  };
-
+  const togglePlanExpansion = (planLabel: string) => { setExpandedPlans(prev => { const next = new Set(prev); if (next.has(planLabel)) { next.delete(planLabel); } else { next.add(planLabel); } return next; }); };
+  const expandAll = () => { const allPlanLabels = new Set(data.filter(r => r.sublevel === undefined).map(r => r.label)); setExpandedPlans(allPlanLabels); };
   const collapseAll = () => { setExpandedPlans(new Set()); };
-
   const visibleRows = useMemo(() => {
     if (isLoading) return [];
     const rows: RowData[] = [];
     let currentPlanLabel: string | null = null;
     for (const row of displayData) {
-      if (row.sublevel === undefined) {
-        currentPlanLabel = row.label;
-        rows.push(row);
-      } else if (row.sublevel === 1) {
-        if (currentPlanLabel && expandedPlans.has(currentPlanLabel)) {
-          rows.push(row);
-        }
-      }
+      if (row.sublevel === undefined) { currentPlanLabel = row.label; rows.push(row); } 
+      else if (row.sublevel === 1) { if (currentPlanLabel && expandedPlans.has(currentPlanLabel)) { rows.push(row); } }
     }
     return rows;
   }, [displayData, expandedPlans, isLoading]);
+  const canEditRowLabel = (row: RowData) => { if (isAdmin) return true; return allowedLabels.has(normalizeLabel(row.label)); };
 
-
-  const canEditRowLabel = (row: RowData) => {
-    if (isAdmin) return true;
-    return allowedLabels.has(normalizeLabel(row.label));
-  };
-
-  // >>> NOVA FUNÇÃO: Para abrir o modal com os dados corretos
-  const openPhysicalInputModal = (row: RowData, monthIndex: number) => {
+  const openPhysicalInputModal = (row: RowData) => {
     if (row.sublevel !== 1 || !canEditRowLabel(row)) return;
-
+    const targetTotal = row.cells.reduce((sum, cell, index) => {
+      if (editableMonths.has(index) && typeof cell.value === 'number') {
+        return sum + cell.value;
+      }
+      return sum;
+    }, 0);
     setPhysicalInputModal({
       isOpen: true,
       capexItem: { capex: row.capex, label: row.label },
-      month: { index: monthIndex, name: MONTHS[monthIndex] },
+      targetTotal: targetTotal,
     });
   };
-
-  // >>> NOVA FUNÇÃO: Para atualizar a tabela quando o modal salvar
-  const handleSavePhysicals = (monthIndex: number, newTotalValue: number) => {
-    if (!physicalInputModal) return;
-    setData(prevData => {
-      const newData = structuredClone(prevData) as RowData[];
-      const rowIndex = newData.findIndex(r => r.capex === physicalInputModal.capexItem.capex);
-      if (rowIndex !== -1) {
-        newData[rowIndex].cells[monthIndex].value = newTotalValue;
-      }
-      return newData;
-    });
-  };
-
+  
   const handleFinishCapex = async (rowToUpdate: RowData) => {
     setData(prevData => prevData.map(row => 
-      row.capex === rowToUpdate.capex 
-        ? { ...row, status_capex: 'FINALIZADO' } 
-        : row
+      row.capex === rowToUpdate.capex ? { ...row, status_capex: 'FINALIZADO' } : row
     ));
-
     try {
       const res = await fetch('/api/capex/status', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ capexLabel: rowToUpdate.capex }),
       });
-
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || 'Falha ao finalizar o subplano.');
@@ -311,9 +179,7 @@ export function CapexTable() {
     } catch (error) {
       console.error(error);
       setData(prevData => prevData.map(row => 
-        row.capex === rowToUpdate.capex 
-          ? { ...row, status_capex: 'PENDENTE' } 
-          : row
+        row.capex === rowToUpdate.capex ? { ...row, status_capex: 'PENDENTE' } : row
       ));
       alert(`Não foi possível finalizar o subplano: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
@@ -395,11 +261,8 @@ export function CapexTable() {
         copy[rowIndex].transfers = savedTransfers;
         return copy;
       });
-    } catch (e) {
-      console.error("Erro ao salvar transferências:", e);
-    } finally {
-      setSavingState((prev) => ({ ...prev, [rowIndex]: false }));
-    }
+    } catch (e) { console.error("Erro ao salvar transferências:", e); } 
+    finally { setSavingState((prev) => ({ ...prev, [rowIndex]: false })); }
   };
 
   const map = useMemo(() => buildTransferMatrix(data), [data]);
@@ -437,33 +300,24 @@ export function CapexTable() {
             </div>
             <div className="flex items-center gap-1">
               <span className="text-xs text-slate-600 mr-2">Meses editáveis:</span>
-              {MONTHS.map((m, idx) => (
-                <button key={idx} onClick={() => {}} className={`text-xs px-2 py-1 rounded border ${editableMonths.has(idx) ? "bg-[#e6f7f0] border-[#00823B] text-[#00663a]" : "bg-white hover:bg-slate-50"}`}>{m}</button>
-              ))}
+              {MONTHS.map((m, idx) => (<button key={idx} className={`text-xs px-2 py-1 rounded border ${editableMonths.has(idx) ? "bg-[#e6f7f0] border-[#00823B] text-[#00663a]" : "bg-white hover:bg-slate-50"}`}>{m}</button>))}
             </div>
             <button onClick={() => setMapOpen(true)} className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded px-3 py-1.5" disabled={isLoading}>Mapa de Transferências</button>
           </div>
         </div>
-        {isLoading ? (
-          <div className="p-6 text-sm text-slate-600">Carregando...</div>
-        ) : data.length === 0 ? (
-          <div className="p-6 text-sm text-slate-600">Nenhum dado encontrado para exibir.</div>
-        ) : (
+        {isLoading ? ( <div className="p-6 text-sm text-slate-600">Carregando...</div> ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-[#00823B] text-white">
                   <th className="sticky left-0 z-20 bg-[#00823B] border border-[#004d23] px-4 py-3 text-left font-semibold min-w-64">CAPEX (R$ Mil)</th>
                   {MONTHS.map((m, idx) => (<th key={idx} className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-32 text-sm">{m}/25</th>))}
-                  
-                  {/* >>> NOVA COLUNA PARA O BOTÃO DE FÍSICOS <<< */}
-                  <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-40 bg-slate-600">INPUT FÍSICOS</th>
-                  
                   <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-40 bg-[#FFB81C] text-slate-900 font-bold">MELHOR VISÃO</th>
                   <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-40 bg-slate-100 text-slate-900 font-bold">META</th>
                   <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-56 bg-indigo-50 text-slate-900 font-bold">TRANSFERÊNCIA (líquida)</th>
                   <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-48 bg-sky-50 text-slate-900 font-bold">SALDO A DISTRIBUIR</th>
                   <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-40 bg-slate-700 text-white">STATUS</th>
+                  <th className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-40 bg-slate-600">INPUT FÍSICOS</th>
                 </tr>
               </thead>
               <tbody>
@@ -484,11 +338,7 @@ export function CapexTable() {
                     <tr key={row.capex} className={`${row.color || (isSubLevel ? "bg-white" : "bg-slate-50")} border-b border-slate-200 hover:bg-slate-50 transition-colors`}>
                       <td className={`sticky left-0 z-10 border border-slate-200 px-4 py-3 font-medium ${row.color || (isSubLevel ? "bg-white" : "bg-slate-50")} ${isSubLevel ? "pl-8 text-slate-700" : "text-slate-900"}`}>
                         <div className="flex items-center gap-2">
-                          {isPlano && (
-                            <button onClick={() => togglePlanExpansion(row.label)} className="p-1 -ml-1 rounded-full hover:bg-slate-200">
-                              <ChevronDown size={16} className={`transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
-                            </button>
-                          )}
+                          {isPlano && (<button onClick={() => togglePlanExpansion(row.label)} className="p-1 -ml-1 rounded-full hover:bg-slate-200"><ChevronDown size={16} className={`transition-transform ${isExpanded ? '' : '-rotate-90'}`} /></button>)}
                           <span>{row.label}</span>
                         </div>
                         {isSubLevel && !canEditRow && (<div className="mt-1 text-[11px] text-slate-500">Sem permissão para editar</div>)}
@@ -497,28 +347,10 @@ export function CapexTable() {
                         const isEditable = isSubLevel && editableMonths.has(cellIndex) && canEditRow;
                         return (
                           <td key={cellIndex} className={`border border-slate-200 px-3 py-3 text-center min-w-32 ${!editableMonths.has(cellIndex) ? "bg-[#e6f0ff] text-slate-900" : "bg-white"}`}>
-                            {isEditable ? (
-                              <input type="number" value={cell.value === 0 ? "" : cell.value} onChange={(e) => handleCellChange(row, rowIndex, cellIndex, e.target.value)} className="w-full bg-[#e6f7f0] border border-[#00823B] rounded px-2 py-1 text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#00823B] focus:bg-white" placeholder="0" />
-                            ) : (
-                              <span className="text-sm font-medium text-slate-700">{formatNumber(typeof cell.value === "number" ? cell.value : 0)}</span>
-                            )}
+                            {isEditable ? (<input type="number" value={cell.value === 0 ? "" : cell.value} onChange={(e) => handleCellChange(row, rowIndex, cellIndex, e.target.value)} className="w-full bg-[#e6f7f0] border border-[#00823B] rounded px-2 py-1 text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#00823B] focus:bg-white" placeholder="0" />) : (<span className="text-sm font-medium text-slate-700">{formatNumber(typeof cell.value === "number" ? cell.value : 0)}</span>)}
                           </td>
                         );
                       })}
-                      
-                      {/* >>> NOVO TD PARA O BOTÃO <<< */}
-                      <td className="border border-slate-200 px-3 py-3 text-center">
-                        {isSubLevel && (
-                            <button 
-                                onClick={() => openPhysicalInputModal(row, Array.from(editableMonths).sort((a,b)=>a-b)[0] ?? 0)}
-                                disabled={!canEditRow || editableMonths.size === 0}
-                                className="flex w-full items-center justify-center gap-2 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded px-3 py-1.5 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <Database size={14} /> Detalhar
-                            </button>
-                        )}
-                      </td>
-
                       <td className="border border-slate-200 px-3 py-3 text-center font-bold text-slate-900 bg-[#fff3e0] min-w-40"><span className="text-sm">{formatNumber(total)}</span></td>
                       <td className="border border-slate-200 px-3 py-3 text-center font-bold text-slate-900 bg-slate-100 min-w-40"><span className="text-sm">{formatNumber(metaVal)}</span></td>
                       <td className="border border-slate-200 px-3 py-3 text-center bg-indigo-50 min-w-56">
@@ -564,43 +396,29 @@ export function CapexTable() {
                       <td className="border border-slate-200 px-3 py-3 text-center">
                         {isSubLevel && (
                           <>
-                            {row.status_capex === 'FINALIZADO' ? (
-                              <span className="flex items-center justify-center gap-2 text-xs font-semibold text-emerald-600 bg-emerald-100 px-3 py-1.5 rounded-full">
-                                <CheckCircle2 size={14} />
-                                Finalizado
-                              </span>
-                            ) : (
-                              <button 
-                                onClick={() => handleFinishCapex(row)}
-                                disabled={!canEditRow}
-                                className="text-xs bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-1.5 disabled:bg-slate-300 disabled:cursor-not-allowed"
-                              >
-                                Finalizar
-                              </button>
-                            )}
+                            {row.status_capex === 'FINALIZADO' ? (<span className="flex items-center justify-center gap-2 text-xs font-semibold text-emerald-600 bg-emerald-100 px-3 py-1.5 rounded-full"><CheckCircle2 size={14} />Finalizado</span>) : (<button onClick={() => handleFinishCapex(row)} disabled={!canEditRow} className="text-xs bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-1.5 disabled:bg-slate-300 disabled:cursor-not-allowed">Finalizar</button>)}
                           </>
                         )}
                         {isPlano && (
                           <>
-                            {row.status_capex === 'FINALIZADO' && (
-                              <span className="flex items-center justify-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-full">
-                                <CheckCircle2 size={14} />
-                                Finalizado
-                              </span>
-                            )}
-                            {row.status_capex === 'PARCIAL' && (
-                              <span className="flex items-center justify-center gap-2 text-xs font-semibold text-yellow-800 bg-yellow-100 px-3 py-1.5 rounded-full">
-                                <AlertCircle size={14} />
-                                Parcial
-                              </span>
-                            )}
-                            {row.status_capex === 'PENDENTE' && (
-                              <span className="flex items-center justify-center gap-2 text-xs font-semibold text-slate-600 bg-slate-200 px-3 py-1.5 rounded-full">
-                                <CircleDot size={14} />
-                                Pendente
-                              </span>
-                            )}
+                            {row.status_capex === 'FINALIZADO' && (<span className="flex items-center justify-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-full"><CheckCircle2 size={14} />Finalizado</span>)}
+                            {row.status_capex === 'PARCIAL' && (<span className="flex items-center justify-center gap-2 text-xs font-semibold text-yellow-800 bg-yellow-100 px-3 py-1.5 rounded-full"><AlertCircle size={14} />Parcial</span>)}
+                            {row.status_capex === 'PENDENTE' && (<span className="flex items-center justify-center gap-2 text-xs font-semibold text-slate-600 bg-slate-200 px-3 py-1.5 rounded-full"><CircleDot size={14} />Pendente</span>)}
                           </>
+                        )}
+                      </td>
+                      <td className="border border-slate-200 px-3 py-3 text-center">
+                        {isSubLevel && row.status_capex === 'FINALIZADO' && (
+                            <button 
+                                onClick={() => openPhysicalInputModal(row)}
+                                disabled={!canEditRow}
+                                className="flex w-full items-center justify-center gap-2 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded px-3 py-1.5 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <Database size={14} /> Detalhar
+                            </button>
+                        )}
+                        {isSubLevel && row.status_capex !== 'FINALIZADO' && (
+                            <span className="text-xs text-slate-500 italic">Finalize para detalhar</span>
                         )}
                       </td>
                     </tr>
@@ -644,15 +462,12 @@ export function CapexTable() {
         )}
       </Card>
       
-      {/* >>> NOVO: Renderiza o modal de físicos se ele estiver aberto <<< */}
       {physicalInputModal && physicalInputModal.isOpen && ( 
         <PhysicalInputModal 
           {...physicalInputModal} 
           onClose={() => setPhysicalInputModal(null)} 
-          onSave={handleSavePhysicals} 
         /> 
       )}
     </>
   );
 }
- 
