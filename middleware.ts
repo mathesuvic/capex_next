@@ -1,11 +1,10 @@
 // middleware.ts
+
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-// ✅ CORREÇÃO 1: Nome da função importada
 import { verifyToken, AUTH_COOKIE } from '@/lib/jwt';
 
 export const config = {
-  // Sua lógica de rotas foi mantida
   matcher: [
     '/home',
     '/solicitacao/:path*',
@@ -13,7 +12,9 @@ export const config = {
     '/capex/:path*',
     '/admin/:path*',
     '/api/me',
+    '/api/capex/resumo-conclusao', // ✅ CORREÇÃO: Rota específica adicionada para garantir que o middleware a reconheça.
     '/api/capex/:path*',
+    '/api/capex/getsummary',
     '/api/solicitacao-recursos/:path*',
     '/api/admin/:path*',
   ],
@@ -39,11 +40,9 @@ export async function middleware(req: NextRequest) {
   }
 
   try {
-    // ✅ CORREÇÃO 2: Como o payload é extraído da função
     const payload = await verifyToken(token);
     const role = (payload as any)?.role;
 
-    // Sua lógica de verificação de Admin foi mantida
     if (
       (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) &&
       role !== 'ADMIN'
@@ -56,13 +55,11 @@ export async function middleware(req: NextRequest) {
 
     return NextResponse.next();
   } catch {
-    // Sua lógica de erro foi mantida
     if (isAPI) return toJSON(401, { error: 'invalid_token' });
     const url = req.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('next', pathname);
     
-    // Adicionado para limpar o cookie inválido
     const response = NextResponse.redirect(url);
     response.cookies.delete(AUTH_COOKIE);
     return response;
