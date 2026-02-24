@@ -2,12 +2,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link"; // << NOVO: Importação do Link para navegação
 import { Card } from "@/components/ui/card";
-import { ChevronDown, CheckCircle2, AlertCircle, CircleDot, Database, XCircle } from "lucide-react";
+import { ChevronDown, CheckCircle2, AlertCircle, CircleDot, Database, XCircle, PieChart } from "lucide-react"; // << NOVO: Adicionado ícone PieChart
 import { PhysicalInputModal } from './physical-input-modal';
 import { normalizeLabel } from "@/lib/utils";
 
-// Tipagens e Funções Helper (sem alterações)
+// O resto do seu código (tipagens, funções helper, etc.) continua exatamente o mesmo.
+// ... (vou omitir o código que não foi alterado para ser breve)
 type CapexStatus = 'PENDENTE' | 'FINALIZADO' | 'PARCIAL';
 type PhysicalStatus = 'SIM' | 'NAO' | 'PENDENTE';
 interface RowData { id: number | string; label: string; capex: string; sublevel?: number; color?: string; cells: CellData[]; computed?: boolean; meta?: number; transfers?: TransferEntry[]; transferNet?: number; status_capex?: CapexStatus; status_fisico?: PhysicalStatus; }
@@ -73,17 +75,11 @@ function buildTransferMatrix(rows: RowData[]) {
 function heatClass(v: number, max: number) { if (v <= 0 || max <= 0) return "bg-white"; const q = v / max; if (q > 0.8) return "bg-emerald-400/60"; if (q > 0.6) return "bg-emerald-300/60"; if (q > 0.4) return "bg-emerald-200/60"; if (q > 0.2) return "bg-emerald-100/60"; return "bg-emerald-50"; }
 type PermissionsResponse = | { isAdmin: true; allowedLabels: "ALL" } | { isAdmin: false; allowedLabels: string[] };
 
-
-// =======================================================================
-// CORREÇÃO 1: Interface do estado do modal foi renomeada para clareza
-// =======================================================================
 interface ModalState {
   isOpen: boolean;
   capexItem: { capex: string; label: string; };
-  financialDataForModal: Record<string, number>; // Antes: editableMonths
+  financialDataForModal: Record<string, number>;
 }
-// =======================================================================
-
 
 export function CapexTable() {
   const [data, setData] = useState<RowData[]>([]);
@@ -97,7 +93,6 @@ export function CapexTable() {
   const [savingState, setSavingState] = useState<{ [rowIndex: number]: boolean }>({});
   const [isLoading, setIsLoading] = useState(true);
   const [expandedPlans, setExpandedPlans] = useState<Set<string>>(new Set());
-  
   const [physicalInputModal, setPhysicalInputModal] = useState<ModalState | null>(null);
 
   const fetchData = async (controller: AbortController) => {
@@ -137,7 +132,9 @@ export function CapexTable() {
     })();
     return () => { controller.abort(); };
   }, []);
-
+  
+  // O resto das funções (useMemo, handlers, etc.) não foi alterado.
+  // ...
   const subplans = useMemo(() => data.filter((r) => r.sublevel === 1).map((r) => ({ label: r.label, id: r.id })), [data]);
   const sublevelOptions = subplans.map((s) => s.label);
   const incomingIndex = useMemo(() => buildIncomingIndex(data), [data]);
@@ -156,14 +153,9 @@ export function CapexTable() {
     return rows;
   }, [displayData, expandedPlans, isLoading]);
   const canEditRowLabel = (row: RowData) => { if (isAdmin) return true; return allowedLabels.has(normalizeLabel(row.label)); };
-
-  // =======================================================================
-  // CORREÇÃO 2: A função helper agora pega TODOS os meses editáveis, mesmo que o valor seja 0
-  // =======================================================================
   const getFinancialDataForEditableMonths = (row: RowData): Record<string, number> => {
     const data: Record<string, number> = {};
     row.cells.forEach((cell, index) => {
-      // Verifica se o ÍNDICE do mês está no Set de meses editáveis
       if (editableMonths.has(index)) {
         const monthName = MONTHS[index];
         data[monthName] = typeof cell.value === 'number' ? cell.value : 0;
@@ -171,24 +163,15 @@ export function CapexTable() {
     });
     return data;
   };
-
-  // =======================================================================
-  // CORREÇÃO 3: A função de abrir o modal foi atualizada para a nova lógica
-  // =======================================================================
   const openPhysicalInputModal = (row: RowData) => {
     if (row.sublevel !== 1 || !canEditRowLabel(row)) return;
-
-    // Usamos a função corrigida para pegar os dados financeiros SOMENTE dos meses editáveis
     const financialData = getFinancialDataForEditableMonths(row);
-    
     setPhysicalInputModal({
       isOpen: true,
       capexItem: { capex: row.capex, label: row.label },
-      financialDataForModal: financialData, // Armazena os dados no estado
+      financialDataForModal: financialData,
     });
   };
-  
-  // (O resto das funções de handle, add, remove, save, etc., não mudam)
   const handleToggleStatus = async (rowToUpdate: RowData) => {
     const originalStatus = rowToUpdate.status_capex || 'PENDENTE';
     const newStatus = originalStatus === 'FINALIZADO' ? 'PENDENTE' : 'FINALIZADO';
@@ -213,7 +196,6 @@ export function CapexTable() {
       alert(`Não foi possível alterar o status: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
   };
-
   const handleCellChange = async (row: RowData, rowIndex: number, cellIndex: number, value: string) => {
     const numValue = value === "" ? 0 : Number.parseFloat(value) || 0;
     if (!canEditRowLabel(row)) return;
@@ -232,7 +214,6 @@ export function CapexTable() {
       } catch (e) { console.error(e); }
     }
   };
-
   const addTransfer = (rowIndex: number) => {
     const row = data[rowIndex];
     if (!row?.label || !canEditRowLabel(row)) return;
@@ -243,7 +224,6 @@ export function CapexTable() {
       return copy;
     });
   };
-
   const removeTransfer = (rowIndex: number, transferId: number | string) => {
     const row = data[rowIndex];
     if (!row || !canEditRowLabel(row)) return;
@@ -253,7 +233,6 @@ export function CapexTable() {
       return copy;
     });
   };
-
   const updateTransferAmount = (rowIndex: number, transferId: string | number, value: string) => {
     const row = data[rowIndex];
     if (!row || !canEditRowLabel(row)) return;
@@ -264,7 +243,6 @@ export function CapexTable() {
       return copy;
     });
   };
-
   const updateTransferTarget = (rowIndex: number, transferId: string | number, toLabel: string) => {
     const row = data[rowIndex];
     if (!row || !canEditRowLabel(row)) return;
@@ -275,7 +253,6 @@ export function CapexTable() {
       return copy;
     });
   };
-
   const saveTransfers = async (rowIndex: number) => {
     const row = data[rowIndex];
     if (!row || !canEditRowLabel(row)) return;
@@ -293,7 +270,6 @@ export function CapexTable() {
     } catch (e) { console.error("Erro ao salvar transferências:", e); } 
     finally { setSavingState((prev) => ({ ...prev, [rowIndex]: false })); }
   };
-
   const map = useMemo(() => buildTransferMatrix(data), [data]);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -317,11 +293,9 @@ export function CapexTable() {
     URL.revokeObjectURL(url);
   };
 
-
   return (
     <>
       <Card className="overflow-hidden border border-slate-200 shadow-lg">
-        {/* O JSX do cabeçalho da tabela e do mapa de transferências não muda */}
         <div className="flex items-center justify-between px-4 py-3 border-b bg-white">
           <h3 className="text-sm font-semibold text-slate-800">CAPEX (R$ Mil)</h3>
           <div className="flex items-center gap-4">
@@ -333,13 +307,27 @@ export function CapexTable() {
               <span className="text-xs text-slate-600 mr-2">Meses editáveis:</span>
               {MONTHS.map((m, idx) => (<button key={idx} className={`text-xs px-2 py-1 rounded border ${editableMonths.has(idx) ? "bg-[#e6f7f0] border-[#00823B] text-[#00663a]" : "bg-white hover:bg-slate-50"}`}>{m}</button>))}
             </div>
+            
+            {/* ======================================================================= */}
+            {/* NOVO: BOTÃO PARA NAVEGAR ATÉ O DASHBOARD DE RESUMO                    */}
+            {/* ======================================================================= */}
+            <Link href="/resumo-conclusao" legacyBehavior>
+              <a className={`flex items-center text-xs bg-teal-600 hover:bg-teal-700 text-white rounded px-3 py-1.5 transition-colors ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <PieChart size={14} className="mr-2" />
+                Dashboard
+              </a>
+            </Link>
+            {/* ======================================================================= */}
+            
             <button onClick={() => setMapOpen(true)} className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded px-3 py-1.5" disabled={isLoading}>Mapa de Transferências</button>
           </div>
         </div>
+        
+        {/* O resto do seu JSX (tabela, modais, etc.) continua exatamente o mesmo. */}
         {isLoading ? ( <div className="p-6 text-sm text-slate-600">Carregando...</div> ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
-              <thead>
+            <thead>
                 <tr className="bg-[#00823B] text-white">
                   <th className="sticky left-0 z-20 bg-[#00823B] border border-[#004d23] px-4 py-3 text-left font-semibold min-w-64">CAPEX (R$ Mil)</th>
                   {MONTHS.map((m, idx) => (<th key={idx} className="border border-[#004d23] px-3 py-3 text-center font-semibold min-w-32 text-sm">{m}/25</th>))}
@@ -496,7 +484,6 @@ export function CapexTable() {
           <p className="text-sm text-slate-600"><span className="inline-block w-3 h-3 bg-[#e6f7f0] border border-[#00823B] rounded mr-2"></span>Valores em <strong>verde</strong> são meses marcados como <strong>editáveis/previstos</strong>.</p>
           <p className="text-sm text-slate-600"><span className="inline-block w-3 h-3 bg-indigo-50 border border-indigo-200 rounded mr-2"></span><strong>Transferência (líquida)</strong> = entradas − saídas. <strong>Saldo a Distribuir</strong> = META − MELHOR VISÃO + Transferência.</p>
         </div>
-        {/* O JSX do mapa de transferências não muda */}
         {mapOpen && !isLoading && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/40" onClick={() => setMapOpen(false)} />
@@ -526,23 +513,18 @@ export function CapexTable() {
         )}
       </Card>
       
-      {/* ======================================================================= */}
-      {/* CORREÇÃO 4: A chamada do modal foi atualizada para passar as props corretas */}
-      {/* ======================================================================= */}
       {physicalInputModal && physicalInputModal.isOpen && ( 
         <PhysicalInputModal 
           isOpen={physicalInputModal.isOpen} 
           onClose={() => setPhysicalInputModal(null)} 
           onSave={() => {
             setPhysicalInputModal(null);
-            // Re-busca os dados da tabela principal para refletir o novo status do físico
             const controller = new AbortController();
             fetchData(controller);
           }}
-          // Passando as props corretas para o novo modal:
           capexLabel={physicalInputModal.capexItem.label}
-          editableMonths={Object.keys(physicalInputModal.financialDataForModal)} // Prop 1: um array com os nomes dos meses
-          financialData={physicalInputModal.financialDataForModal} // Prop 2: o objeto com os valores financeiros
+          editableMonths={Object.keys(physicalInputModal.financialDataForModal)}
+          financialData={physicalInputModal.financialDataForModal}
         /> 
       )}
     </>
