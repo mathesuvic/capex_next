@@ -9,9 +9,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// --- Enums ---
 enum CapexStatus {
   PENDENTE
   FINALIZADO
+  PARCIAL // ✅ ADICIONADO ESTE STATUS FALTANTE
 }
 
 enum PhysicalStatus {
@@ -20,63 +22,79 @@ enum PhysicalStatus {
   PENDENTE
 }
 
+enum StatusSolicitacao {
+  pendente
+  aprovado
+  rejeitado
+}
+
+enum PermissionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum UserRole {
+  USER
+  EDITOR
+  ADMIN
+}
+
+enum RiscoRealizacao {
+  BAIXO
+  MEDIO
+  ALTO
+}
+
+// --- Modelos ---
 model CapexWeb {
-  plano          String?        @db.VarChar(10)
-  capex          String         @id @db.VarChar(50)
-  jan_ano        Decimal?       @db.Decimal(18, 2)
-  fev_ano        Decimal?       @db.Decimal(18, 2)
-  mar_ano        Decimal?       @db.Decimal(18, 2)
-  abr_ano        Decimal?       @db.Decimal(18, 2)
-  mai_ano        Decimal?       @db.Decimal(18, 2)
-  jun_ano        Decimal?       @db.Decimal(18, 2)
-  jul_ano        Decimal?       @db.Decimal(18, 2)
-  ago_ano        Decimal?       @db.Decimal(18, 2)
-  set_ano        Decimal?       @db.Decimal(18, 2)
-  out_ano        Decimal?       @db.Decimal(18, 2)
-  nov_ano        Decimal?       @db.Decimal(18, 2)
-  dez_ano        Decimal?       @db.Decimal(18, 2)
-  ordem          Int            @default(0)
-  meta           Decimal?       @db.Decimal(18, 2)
-  status_capex   CapexStatus    @default(PENDENTE)
-  status_fisico  PhysicalStatus @default(PENDENTE)
-  transfersFrom  Transfer[]     @relation("TransfersFrom")
-  transfersTo    Transfer[]     @relation("TransfersTo")
+  plano          String?         @db.VarChar(10)
+  capex          String          @id @db.VarChar(50)
+  jan_ano        Decimal?        @db.Decimal(18, 2)
+  fev_ano        Decimal?        @db.Decimal(18, 2)
+  mar_ano        Decimal?        @db.Decimal(18, 2)
+  abr_ano        Decimal?        @db.Decimal(18, 2)
+  mai_ano        Decimal?        @db.Decimal(18, 2)
+  jun_ano        Decimal?        @db.Decimal(18, 2)
+  jul_ano        Decimal?        @db.Decimal(18, 2)
+  ago_ano        Decimal?        @db.Decimal(18, 2)
+  set_ano        Decimal?        @db.Decimal(18, 2)
+  out_ano        Decimal?        @db.Decimal(18, 2)
+  nov_ano        Decimal?        @db.Decimal(18, 2)
+  dez_ano        Decimal?        @db.Decimal(18, 2)
+  ordem          Int             @default(0)
+  meta           Decimal?        @db.Decimal(18, 2)
+  status_capex   CapexStatus     @default(PENDENTE)
+  status_fisico  PhysicalStatus  @default(PENDENTE)
+  transfersFrom  Transfer[]      @relation("TransfersFrom")
+  transfersTo    Transfer[]      @relation("TransfersTo")
   physicalInputs PhysicalInput[]
 
   @@map("capex_web")
 }
 
 model PhysicalInput {
-  id        Int      @id @default(autoincrement())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  name      String
-  risco     RiscoRealizacao @default(BAIXO)
-  jan       Decimal  @default(0) @db.Decimal(18, 2)
-  fev       Decimal  @default(0) @db.Decimal(18, 2)
-  mar       Decimal  @default(0) @db.Decimal(18, 2)
-  abr       Decimal  @default(0) @db.Decimal(18, 2)
-  mai       Decimal  @default(0) @db.Decimal(18, 2)
-  jun       Decimal  @default(0) @db.Decimal(18, 2)
-  jul       Decimal  @default(0) @db.Decimal(18, 2)
-  ago       Decimal  @default(0) @db.Decimal(18, 2)
-  set       Decimal  @default(0) @db.Decimal(18, 2)
-  out       Decimal  @default(0) @db.Decimal(18, 2)
-  nov       Decimal  @default(0) @db.Decimal(18, 2)
-  dez       Decimal  @default(0) @db.Decimal(18, 2)
+  id         Int             @id @default(autoincrement())
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  name       String
+  risco      RiscoRealizacao @default(BAIXO)
+  jan        Decimal         @default(0) @db.Decimal(18, 2)
+  fev        Decimal         @default(0) @db.Decimal(18, 2)
+  mar        Decimal         @default(0) @db.Decimal(18, 2)
+  abr        Decimal         @default(0) @db.Decimal(18, 2)
+  mai        Decimal         @default(0) @db.Decimal(18, 2)
+  jun        Decimal         @default(0) @db.Decimal(18, 2)
+  jul        Decimal         @default(0) @db.Decimal(18, 2)
+  ago        Decimal         @default(0) @db.Decimal(18, 2)
+  set        Decimal         @default(0) @db.Decimal(18, 2)
+  out        Decimal         @default(0) @db.Decimal(18, 2)
+  nov        Decimal         @default(0) @db.Decimal(18, 2)
+  dez        Decimal         @default(0) @db.Decimal(18, 2)
+  capex      CapexWeb        @relation(fields: [capexLabel], references: [capex], onDelete: Cascade)
+  capexLabel String          @db.VarChar(50)
 
-  // =================================================================
-  // AQUI ESTÁ A CORREÇÃO PRINCIPAL
-  // =================================================================
-  // O relacionamento agora aponta para o campo `capex` (String) do modelo CapexWeb.
-  capex       CapexWeb @relation(fields: [capexLabel], references: [capex], onDelete: Cascade)
-  // O campo da chave estrangeira foi renomeado para `capexLabel` e seu tipo mudado para `String`.
-  // Adicionei `@db.VarChar(50)` para garantir que o tipo no banco seja compatível.
-  capexLabel  String   @db.VarChar(50)
-
-  // O índice unique foi atualizado para usar o novo nome do campo.
   @@unique([name, capexLabel])
-  // =================================================================
 }
 
 model Transfer {
@@ -176,37 +194,14 @@ model User {
   @@map("user")
 }
 
-model Subplan {
-  plano_investimento String  @id
-  tipo               String?
+// ✅ NOVO MODELO CORRIGIDO PARA A TABELA planos_desc
+model PlanosDesc {
+  tipo               String?  // ✅ CORRIGIDO: de 'tpo' para 'tipo'
   natureza           String?
   plano_text         String?
   id                 String?
+  plano_investimento String  @id @unique // Usado como chave para o "de-para"
   plano              String?
 
   @@map("planos_desc")
-}
-
-enum StatusSolicitacao {
-  pendente
-  aprovado
-  rejeitado
-}
-
-enum PermissionRequestStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
-enum UserRole {
-  USER
-  EDITOR
-  ADMIN
-}
-
-enum RiscoRealizacao {
-  BAIXO
-  MEDIO
-  ALTO
 }
