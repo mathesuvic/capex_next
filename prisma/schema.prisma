@@ -7,92 +7,30 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// --- Enums ---
-enum CapexStatus {
-  PENDENTE
-  FINALIZADO
-  PARCIAL
-}
-
-enum PhysicalStatus {
-  SIM
-  NAO
-  PENDENTE
-}
-
-enum StatusSolicitacao {
-  pendente
-  aprovado
-  rejeitado
-}
-
-enum PermissionRequestStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
-enum UserRole {
-  USER
-  EDITOR
-  ADMIN
-}
-
-enum RiscoRealizacao {
-  BAIXO
-  MEDIO
-  ALTO
-}
-
-// --- Modelos ---
 model CapexWeb {
-  plano          String?         @db.VarChar(10)
-  capex          String          @id @db.VarChar(50)
-  jan_ano        Decimal?        @db.Decimal(18, 2)
-  fev_ano        Decimal?        @db.Decimal(18, 2)
-  mar_ano        Decimal?        @db.Decimal(18, 2)
-  abr_ano        Decimal?        @db.Decimal(18, 2)
-  mai_ano        Decimal?        @db.Decimal(18, 2)
-  jun_ano        Decimal?        @db.Decimal(18, 2)
-  jul_ano        Decimal?        @db.Decimal(18, 2)
-  ago_ano        Decimal?        @db.Decimal(18, 2)
-  set_ano        Decimal?        @db.Decimal(18, 2)
-  out_ano        Decimal?        @db.Decimal(18, 2)
-  nov_ano        Decimal?        @db.Decimal(18, 2)
-  dez_ano        Decimal?        @db.Decimal(18, 2)
-  ordem          Int             @default(0)
-  meta           Decimal?        @db.Decimal(18, 2)
-  status_capex   CapexStatus     @default(PENDENTE)
-  status_fisico  PhysicalStatus  @default(PENDENTE)
-  transfersFrom  Transfer[]      @relation("TransfersFrom")
-  transfersTo    Transfer[]      @relation("TransfersTo")
-  physicalInputs PhysicalInput[]
+  plano         String?         @db.VarChar(10)
+  capex         String          @id @db.VarChar(50)
+  jan_ano       Decimal?        @db.Decimal(18, 2)
+  fev_ano       Decimal?        @db.Decimal(18, 2)
+  mar_ano       Decimal?        @db.Decimal(18, 2)
+  abr_ano       Decimal?        @db.Decimal(18, 2)
+  mai_ano       Decimal?        @db.Decimal(18, 2)
+  jun_ano       Decimal?        @db.Decimal(18, 2)
+  jul_ano       Decimal?        @db.Decimal(18, 2)
+  ago_ano       Decimal?        @db.Decimal(18, 2)
+  set_ano       Decimal?        @db.Decimal(18, 2)
+  out_ano       Decimal?        @db.Decimal(18, 2)
+  nov_ano       Decimal?        @db.Decimal(18, 2)
+  dez_ano       Decimal?        @db.Decimal(18, 2)
+  ordem         Int             @default(0)
+  meta          Decimal?        @db.Decimal(18, 2)
+  status_capex  CapexStatus     @default(PENDENTE)
+  status_fisico PhysicalStatus  @default(PENDENTE)
+  physicalinput physicalinput[]
+  transfersFrom Transfer[]      @relation("TransfersFrom")
+  transfersTo   Transfer[]      @relation("TransfersTo")
 
   @@map("capex_web")
-}
-
-model PhysicalInput {
-  id         Int             @id @default(autoincrement())
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
-  name       String
-  risco      RiscoRealizacao @default(BAIXO)
-  jan        Decimal         @default(0) @db.Decimal(18, 2)
-  fev        Decimal         @default(0) @db.Decimal(18, 2)
-  mar        Decimal         @default(0) @db.Decimal(18, 2)
-  abr        Decimal         @default(0) @db.Decimal(18, 2)
-  mai        Decimal         @default(0) @db.Decimal(18, 2)
-  jun        Decimal         @default(0) @db.Decimal(18, 2)
-  jul        Decimal         @default(0) @db.Decimal(18, 2)
-  ago        Decimal         @default(0) @db.Decimal(18, 2)
-  set        Decimal         @default(0) @db.Decimal(18, 2)
-  out        Decimal         @default(0) @db.Decimal(18, 2)
-  nov        Decimal         @default(0) @db.Decimal(18, 2)
-  dez        Decimal         @default(0) @db.Decimal(18, 2)
-  capex      CapexWeb        @relation(fields: [capexLabel], references: [capex], onDelete: Cascade)
-  capexLabel String          @db.VarChar(50)
-
-  @@unique([name, capexLabel])
 }
 
 model Transfer {
@@ -101,14 +39,13 @@ model Transfer {
   fromCapex String   @db.VarChar(50)
   toCapex   String   @db.VarChar(50)
   from      CapexWeb @relation("TransfersFrom", fields: [fromCapex], references: [capex], onDelete: Cascade)
-  to        CapexWeb @relation("TransfersTo",   fields: [toCapex],   references: [capex], onDelete: Cascade)
+  to        CapexWeb @relation("TransfersTo", fields: [toCapex], references: [capex], onDelete: Cascade)
 
   @@index([fromCapex])
   @@index([toCapex])
   @@map("transfers")
 }
 
-// ✅ Tabela de Carimbos — editável sem deploy
 model Carimbo {
   id           Int                   @id @default(autoincrement())
   nome         String                @unique @db.VarChar(100)
@@ -144,10 +81,8 @@ model SolicitacaoRecursos {
   status_solicitacao StatusSolicitacao @default(pendente)
   decidedAt          DateTime?         @db.DateTime(0)
   decidedByEmail     String?
-
-  // ✅ FK para Carimbo (opcional)
-  carimboid Int?
-  carimbo   Carimbo? @relation(fields: [carimboid], references: [id], onDelete: SetNull)
+  carimboid          Int?
+  carimbo            Carimbo?          @relation(fields: [carimboid], references: [id])
 
   @@index([status_solicitacao])
   @@index([carimboid])
@@ -167,14 +102,15 @@ model CapexPermission {
 
 model PasswordResetToken {
   id        String    @id @default(cuid())
-  tokenHash String    @unique
   userId    String
   createdAt DateTime  @default(now())
   usedAt    DateTime?
   expiresAt DateTime
+  tokenHash String    @unique
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
+  @@index([userId])
   @@map("passwordresettoken")
 }
 
@@ -188,24 +124,26 @@ model PermissionRequest {
   decidedAt       DateTime?
   decidedByUserId String?
   decidedBy       User?                   @relation("RequestsDecided", fields: [decidedByUserId], references: [id])
-  requester       User                    @relation("RequestsMade",    fields: [userId],           references: [id], onDelete: Cascade)
+  requester       User                    @relation("RequestsMade", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status])
+  @@index([decidedByUserId])
+  @@index([userId])
   @@map("permissionrequest")
 }
 
 model User {
-  id                  String              @id @default(cuid())
-  email               String              @unique
+  id                  String               @id @default(cuid())
+  email               String               @unique
   name                String?
   passwordHash        String?
-  role                UserRole            @default(USER)
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  role                UserRole             @default(USER)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
   capexPermissions    CapexPermission[]
   passwordResetTokens PasswordResetToken[]
-  requestsDecided     PermissionRequest[] @relation("RequestsDecided")
-  requestsMade        PermissionRequest[] @relation("RequestsMade")
+  requestsDecided     PermissionRequest[]  @relation("RequestsDecided")
+  requestsMade        PermissionRequest[]  @relation("RequestsMade")
 
   @@map("user")
 }
@@ -219,4 +157,85 @@ model PlanosDesc {
   plano              String?
 
   @@map("planos_desc")
+}
+
+model notification {
+  id        String            @id
+  title     String
+  message   String
+  type      notification_type
+  read      Boolean           @default(false)
+  userId    String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime
+
+  @@index([read], map: "Notification_read_idx")
+  @@index([userId], map: "Notification_userId_idx")
+}
+
+model physicalinput {
+  id         Int                 @id @default(autoincrement())
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime
+  name       String
+  risco      physicalinput_risco @default(BAIXO)
+  jan        Decimal             @default(0.00) @db.Decimal(18, 2)
+  fev        Decimal             @default(0.00) @db.Decimal(18, 2)
+  mar        Decimal             @default(0.00) @db.Decimal(18, 2)
+  abr        Decimal             @default(0.00) @db.Decimal(18, 2)
+  mai        Decimal             @default(0.00) @db.Decimal(18, 2)
+  jun        Decimal             @default(0.00) @db.Decimal(18, 2)
+  jul        Decimal             @default(0.00) @db.Decimal(18, 2)
+  ago        Decimal             @default(0.00) @db.Decimal(18, 2)
+  set        Decimal             @default(0.00) @db.Decimal(18, 2)
+  out        Decimal             @default(0.00) @db.Decimal(18, 2)
+  nov        Decimal             @default(0.00) @db.Decimal(18, 2)
+  dez        Decimal             @default(0.00) @db.Decimal(18, 2)
+  capexLabel String              @db.VarChar(50)
+  capex_web  CapexWeb            @relation(fields: [capexLabel], references: [capex], onDelete: Cascade, map: "PhysicalInput_capexLabel_fkey")
+
+  @@unique([name, capexLabel], map: "PhysicalInput_name_capexLabel_key")
+  @@index([capexLabel], map: "PhysicalInput_capexLabel_fkey")
+}
+
+enum CapexStatus {
+  PENDENTE
+  FINALIZADO
+  PARCIAL
+}
+
+enum PhysicalStatus {
+  SIM
+  NAO
+  PENDENTE
+}
+
+enum StatusSolicitacao {
+  pendente
+  aprovado
+  rejeitado
+}
+
+enum PermissionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum UserRole {
+  USER
+  EDITOR
+  ADMIN
+}
+
+enum notification_type {
+  GLOBAL
+  USER_SPECIFIC
+  ADMIN_ONLY
+}
+
+enum physicalinput_risco {
+  BAIXO
+  MEDIO
+  ALTO
 }

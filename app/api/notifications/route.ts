@@ -1,22 +1,29 @@
 // app/api/notifications/route.ts
-import { NextResponse } from "next/server";
+import { NextResponse } from "next/server"
+import { getCurrentUser } from "@/lib/auth"
+import prisma from "@/lib/prisma"
 
 export async function GET() {
-  // Substitua depois por query real no banco
-  return NextResponse.json([
-    {
-      id: "1",
-      title: "Nova solicitação",
-      message: "Pedro solicitou aprovação no subplano BA-01",
-      read: false,
-      createdAt: new Date().toISOString(),
+  const user = await getCurrentUser()
+
+  if (!user) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
+  }
+
+  const { id: userId, role } = user
+
+  const notifications = await prisma.notification.findMany({
+    where: {
+      OR: [
+        { type: "GLOBAL" },
+        // ADMIN_ONLY: só traz as que têm o userId do admin logado
+        ...(role === "ADMIN" ? [{ type: "ADMIN_ONLY" as const, userId }] : []),
+        { type: "USER_SPECIFIC", userId },
+      ],
     },
-    {
-      id: "2",
-      title: "Permissão aprovada",
-      message: "Sua solicitação de edição foi aprovada",
-      read: true,
-      createdAt: new Date().toISOString(),
-    },
-  ]);
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  })
+
+  return NextResponse.json(notifications)
 }

@@ -191,13 +191,70 @@ export async function POST(req: Request) {
         justificativa     : p.justification,
         email_solicitante : email,
         status_solicitacao: "pendente" as const,
-        // Conecta carimbo via FK somente se informado
         ...(p.carimboId ? { carimboid: p.carimboId } : {}),
         ...months,
       }
     })
 
     const result = await prisma.solicitacaoRecursos.createMany({ data: rows })
+
+    // ── 🔔 NOTIFICAÇÕES ──────────────────────────────────────────────────────
+    const solicitante = await prisma.user.findUnique({
+      where : { email },
+      select: { id: true },
+    })
+
+    const admins = await prisma.user.findMany({
+      where : { role: "ADMIN" },
+      select: { id: true },
+    })
+
+    const now   = new Date()
+    const count = physicals.length
+    const label = count === 1 ? "1 físico" : `${count} físicos`
+
+    type NotificationData = {
+      id: string; title: string; message: string
+      type: "USER_SPECIFIC" | "ADMIN_ONLY" | "GLOBAL"
+      userId: string | null; read: boolean
+      createdAt: Date; updatedAt: Date
+    }
+
+    const notifications: NotificationData[] = []
+
+    // 1️⃣ Notificação para o solicitante
+    if (solicitante) {
+      notifications.push({
+        id       : crypto.randomUUID(),
+        title    : "Solicitação cadastrada",
+        message  : `Sua solicitação de recursos (${label}) foi registrada e aguarda aprovação.`,
+        type     : "USER_SPECIFIC",
+        userId   : solicitante.id,
+        read     : false,
+        createdAt: now,
+        updatedAt: now,
+      })
+    }
+
+    // 2️⃣ Notificação para cada ADMIN
+    for (const admin of admins) {
+      notifications.push({
+        id       : crypto.randomUUID(),
+        title    : "Nova solicitação de recursos",
+        message  : `O usuário ${email} enviou uma nova solicitação de recursos (${label}) aguardando aprovação.`,
+        type     : "ADMIN_ONLY",
+        userId   : admin.id,
+        read     : false,
+        createdAt: now,
+        updatedAt: now,
+      })
+    }
+
+    if (notifications.length > 0) {
+      await prisma.notification.createMany({ data: notifications })
+    }
+    // ── FIM NOTIFICAÇÕES ─────────────────────────────────────────────────────
+
     return NextResponse.json({ ok: true, inserted: result.count })
   } catch (e) {
     console.error("[POST /api/solicitacao-recursos]", e)
