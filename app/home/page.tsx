@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { LogoutButton } from "@/components/auth/LogoutButton";
+import { NotificationButton } from "@/components/ui/NotificationButton";
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -200,14 +201,8 @@ export default async function Home() {
           {/* Direita */}
           <div className="flex items-center gap-3">
 
-            {/* Notificação */}
-            <button className="relative w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
-              <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white" />
-            </button>
+            {/* ✅ Botão de notificações com dropdown */}
+            <NotificationButton />
 
             {/* Avatar + nome */}
             <div className="flex items-center gap-2">
@@ -220,7 +215,7 @@ export default async function Home() {
               </div>
             </div>
 
-            {/* ✅ Botão Sair — chama POST /api/logout */}
+            {/* ✅ Botão Sair */}
             <LogoutButton />
 
           </div>
