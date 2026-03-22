@@ -15,3 +15,12 @@ export function normalizeLabel(input: string): string {
     .trim()
     .toLowerCase();
 }
+
+export function getFirstName(fullName: string | null | undefined): string {
+  if (!fullName) return "Usuário";
+  return fullName.trim().split(" ")[0];
+}
+
+export function getRoleLabel(role: string): string {
+  return role === "ADMIN" ? "Administrador" : "Usuário";
+}
