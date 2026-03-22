@@ -13,6 +13,8 @@
     "seed": "node prisma/seed.js"
   },
   "dependencies": {
+    "@fontsource/geist": "^5.2.8",
+    "@fontsource/geist-mono": "^5.2.7",
     "@hookform/resolvers": "^3.10.0",
     "@prisma/client": "^5.22.0",
     "@radix-ui/react-accordion": "1.2.2",

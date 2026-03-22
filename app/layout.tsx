@@ -1,10 +1,22 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import '@fontsource/geist/100.css'
+import '@fontsource/geist/200.css'
+import '@fontsource/geist/300.css'
+import '@fontsource/geist/400.css'
+import '@fontsource/geist/500.css'
+import '@fontsource/geist/600.css'
+import '@fontsource/geist/700.css'
+import '@fontsource/geist/800.css'
+import '@fontsource/geist/900.css'
+import '@fontsource/geist-mono/100.css'
+import '@fontsource/geist-mono/200.css'
+import '@fontsource/geist-mono/300.css'
+import '@fontsource/geist-mono/400.css'
+import '@fontsource/geist-mono/500.css'
+import '@fontsource/geist-mono/600.css'
+import '@fontsource/geist-mono/700.css'
 import './globals.css'
-
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: 'CapEx - Coelba',
@@ -35,8 +47,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <body className={`font-sans antialiased`}>
+    <html lang="pt-BR">
+      <body className="font-sans antialiased">
         {children}
         <Analytics />
       </body>
