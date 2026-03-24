@@ -3,9 +3,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Card } from "@/components/ui/card";
 import {
-  ChevronDown, CheckCircle2, AlertCircle, CircleDot,
+  CheckCircle2, AlertCircle, CircleDot,
   Database, XCircle, BarChart2, ArrowRightLeft,
   ChevronRight, Loader2
 } from "lucide-react";
@@ -13,7 +12,7 @@ import { PhysicalInputModal } from './physical-input-modal';
 import { normalizeLabel } from "@/lib/utils";
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
-type CapexStatus   = 'PENDENTE' | 'FINALIZADO' | 'PARCIAL';
+type CapexStatus    = 'PENDENTE' | 'FINALIZADO' | 'PARCIAL';
 type PhysicalStatus = 'SIM' | 'NAO' | 'PENDENTE';
 
 interface RowData {
@@ -91,7 +90,7 @@ function computeDisplay(rows: RowData[], editableMonths: Set<number>) {
     if (row.sublevel === undefined) {
       const agg = Array(12).fill(0);
       const monthIsPrevisto = Array(12).fill(false) as boolean[];
-      let metaSum = 0; let netSum = 0;
+      let metaSum = 0, netSum = 0;
       const childrenStatuses: CapexStatus[] = [];
       let j = i + 1;
       while (j < res.length && res[j].sublevel === 1) {
@@ -100,15 +99,15 @@ function computeDisplay(rows: RowData[], editableMonths: Set<number>) {
           if (cell.type === "previsto") monthIsPrevisto[idx] = true;
         });
         metaSum += res[j].meta ?? 0;
-        netSum += net[j];
-        res[j] = { ...res[j], transferNet: net[j] };
+        netSum  += net[j];
+        res[j]   = { ...res[j], transferNet: net[j] };
         if (res[j].status_capex) childrenStatuses.push(res[j].status_capex!);
         j++;
       }
       let parentStatus: CapexStatus = 'PENDENTE';
       if (childrenStatuses.length > 0) {
-        if (childrenStatuses.every(s => s === 'FINALIZADO')) parentStatus = 'FINALIZADO';
-        else if (childrenStatuses.some(s => s === 'FINALIZADO')) parentStatus = 'PARCIAL';
+        if      (childrenStatuses.every(s => s === 'FINALIZADO')) parentStatus = 'FINALIZADO';
+        else if (childrenStatuses.some(s => s === 'FINALIZADO'))  parentStatus = 'PARCIAL';
       }
       for (let mi = 0; mi < 12; mi++) if (editableMonths.has(mi)) monthIsPrevisto[mi] = true;
       res[i] = {
@@ -119,10 +118,7 @@ function computeDisplay(rows: RowData[], editableMonths: Set<number>) {
     } else {
       res[i] = {
         ...res[i],
-        cells: res[i].cells.map((c, idx) => ({
-          value: c.value,
-          type: editableMonths.has(idx) ? "previsto" : c.type
-        }))
+        cells: res[i].cells.map((c, idx) => ({ value: c.value, type: editableMonths.has(idx) ? "previsto" : c.type }))
       };
       i++;
     }
@@ -131,10 +127,10 @@ function computeDisplay(rows: RowData[], editableMonths: Set<number>) {
 }
 
 function buildTransferMatrix(rows: RowData[]) {
-  const labels  = rows.filter(r => r.sublevel === 1).map(r => r.label);
-  const idxMap  = new Map(labels.map((l, i) => [l, i] as const));
-  const n       = labels.length;
-  const matrix  = Array.from({ length: n }, () => Array(n).fill(0));
+  const labels   = rows.filter(r => r.sublevel === 1).map(r => r.label);
+  const idxMap   = new Map(labels.map((l, i) => [l, i] as const));
+  const n        = labels.length;
+  const matrix   = Array.from({ length: n }, () => Array(n).fill(0));
   const outgoing = Array(n).fill(0);
   const incoming = Array(n).fill(0);
   rows.forEach(r => {
@@ -145,8 +141,8 @@ function buildTransferMatrix(rows: RowData[]) {
       const toIdx = idxMap.get(t.to);
       if (toIdx == null) return;
       matrix[fromIdx][toIdx] += t.amount;
-      outgoing[fromIdx] += t.amount;
-      incoming[toIdx]   += t.amount;
+      outgoing[fromIdx]      += t.amount;
+      incoming[toIdx]        += t.amount;
     });
   });
   const net = labels.map((_, i) => incoming[i] - outgoing[i]);
@@ -165,8 +161,6 @@ function heatClass(v: number, max: number) {
 }
 
 // ─── Sub-componentes ─────────────────────────────────────────────────────────
-
-/** Badge colorido de status capex */
 function StatusBadge({ status }: { status: CapexStatus }) {
   if (status === 'FINALIZADO') return (
     <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
@@ -187,20 +181,20 @@ function StatusBadge({ status }: { status: CapexStatus }) {
 
 // ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
 export function CapexTable() {
-  const [data,            setData           ] = useState<RowData[]>([]);
-  const [mapOpen,         setMapOpen        ] = useState(false);
-  const [mapTab,          setMapTab         ] = useState<"matrix" | "list">("matrix");
-  const [query,           setQuery          ] = useState("");
-  const [hideZeros,       setHideZeros      ] = useState(true);
-  const [editableMonths,  setEditableMonths ] = useState<Set<number>>(() => new Set(parseEnvEditableMonths()));
-  const [isAdmin,         setIsAdmin        ] = useState(false);
-  const [allowedLabels,   setAllowedLabels  ] = useState<Set<string>>(() => new Set());
-  const [savingState,     setSavingState    ] = useState<Record<number, boolean>>({});
-  const [isLoading,       setIsLoading      ] = useState(true);
-  const [expandedPlans,   setExpandedPlans  ] = useState<Set<string>>(new Set());
+  const [data,               setData              ] = useState<RowData[]>([]);
+  const [mapOpen,            setMapOpen           ] = useState(false);
+  const [mapTab,             setMapTab            ] = useState<"matrix" | "list">("matrix");
+  const [query,              setQuery             ] = useState("");
+  const [hideZeros,          setHideZeros         ] = useState(true);
+  const [editableMonths,     setEditableMonths    ] = useState<Set<number>>(() => new Set(parseEnvEditableMonths()));
+  const [isAdmin,            setIsAdmin           ] = useState(false);
+  const [allowedLabels,      setAllowedLabels     ] = useState<Set<string>>(() => new Set());
+  const [savingState,        setSavingState       ] = useState<Record<number, boolean>>({});
+  const [isLoading,          setIsLoading         ] = useState(true);
+  const [expandedPlans,      setExpandedPlans     ] = useState<Set<string>>(new Set());
   const [physicalInputModal, setPhysicalInputModal] = useState<ModalState | null>(null);
 
-  // ── Fetch data ──────────────────────────────────────────────────────────────
+  // ── Fetch ───────────────────────────────────────────────────────────────────
   const fetchData = async (controller: AbortController) => {
     setIsLoading(true);
     try {
@@ -208,14 +202,11 @@ export function CapexTable() {
       if (!res.ok) throw new Error("Falha ao buscar /api/capex");
       const json = (await res.json()) as RowData[];
       setData(json);
-      if (expandedPlans.size === 0 && json.length > 0) {
+      if (expandedPlans.size === 0 && json.length > 0)
         setExpandedPlans(new Set(json.filter(r => r.sublevel === undefined).map(r => r.label)));
-      }
     } catch (e) {
       if ((e as any)?.name !== "AbortError") console.error(e);
-    } finally {
-      setIsLoading(false);
-    }
+    } finally { setIsLoading(false); }
   };
 
   useEffect(() => {
@@ -246,10 +237,10 @@ export function CapexTable() {
   }, []);
 
   // ── Memos ───────────────────────────────────────────────────────────────────
-  const subplans       = useMemo(() => data.filter(r => r.sublevel === 1).map(r => ({ label: r.label, id: r.id })), [data]);
+  const subplans        = useMemo(() => data.filter(r => r.sublevel === 1).map(r => ({ label: r.label, id: r.id })), [data]);
   const sublevelOptions = subplans.map(s => s.label);
-  const incomingIndex  = useMemo(() => buildIncomingIndex(data), [data]);
-  const displayData    = useMemo(() => computeDisplay(data, editableMonths), [data, editableMonths]);
+  const incomingIndex   = useMemo(() => buildIncomingIndex(data), [data]);
+  const displayData     = useMemo(() => computeDisplay(data, editableMonths), [data, editableMonths]);
 
   const visibleRows = useMemo(() => {
     if (isLoading) return [];
@@ -263,6 +254,7 @@ export function CapexTable() {
   }, [displayData, expandedPlans, isLoading]);
 
   const map = useMemo(() => buildTransferMatrix(data), [data]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return { labels: map.labels, rows: map.matrix, idxs: map.labels.map((_, i) => i) };
@@ -272,18 +264,16 @@ export function CapexTable() {
 
   const edges = useMemo(() => {
     const list: { from: string; to: string; amount: number }[] = [];
-    map.labels.forEach((from, i) => {
-      map.labels.forEach((to, j) => { const v = map.matrix[i][j]; if (v > 0) list.push({ from, to, amount: v }); });
-    });
+    map.labels.forEach((from, i) =>
+      map.labels.forEach((to, j) => { const v = map.matrix[i][j]; if (v > 0) list.push({ from, to, amount: v }); })
+    );
     return list.sort((a, b) => b.amount - a.amount);
   }, [map]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
-  const canEditRowLabel = (row: RowData) => isAdmin || allowedLabels.has(normalizeLabel(row.label));
-
-  const expandAll   = () => setExpandedPlans(new Set(data.filter(r => r.sublevel === undefined).map(r => r.label)));
-  const collapseAll = () => setExpandedPlans(new Set());
-
+  const canEditRowLabel     = (row: RowData) => isAdmin || allowedLabels.has(normalizeLabel(row.label));
+  const expandAll           = () => setExpandedPlans(new Set(data.filter(r => r.sublevel === undefined).map(r => r.label)));
+  const collapseAll         = () => setExpandedPlans(new Set());
   const togglePlanExpansion = (label: string) =>
     setExpandedPlans(prev => { const n = new Set(prev); n.has(label) ? n.delete(label) : n.add(label); return n; });
 
@@ -405,15 +395,13 @@ export function CapexTable() {
     a.click(); URL.revokeObjectURL(a.href);
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
   return (
     <>
       <div className="flex flex-col h-full">
 
         {/* ══ Toolbar ══════════════════════════════════════════════════════════ */}
         <div className="flex items-center justify-between px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm mb-3 gap-3 flex-wrap">
-
-          {/* Esquerda: label + expand/collapse */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">CAPEX (R$ Mil)</span>
             <div className="h-4 w-px bg-slate-200" />
@@ -427,7 +415,6 @@ export function CapexTable() {
             </button>
           </div>
 
-          {/* Centro: meses editáveis */}
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] text-slate-400 font-medium mr-1">Meses editáveis:</span>
             {MONTHS.map((m, idx) => (
@@ -445,7 +432,6 @@ export function CapexTable() {
             ))}
           </div>
 
-          {/* Direita: ações */}
           <div className="flex items-center gap-2">
             <Link href="/resumo-conclusao"
               className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-[#00823B] hover:bg-[#006830] text-white rounded-lg px-3 py-1.5 transition-colors shadow-sm">
@@ -465,19 +451,16 @@ export function CapexTable() {
               <Loader2 size={18} className="animate-spin" />Carregando dados…
             </div>
           ) : (
-            /* ── Scroll container com scrollbar no topo via CSS ── */
             <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-280px)]"
               style={{ scrollbarWidth: "thin", scrollbarColor: "#cbd5e1 #f1f5f9" }}>
               <table className="w-full border-collapse text-sm">
 
-                {/* ── Cabeçalho fixo ── */}
+                {/* ── Cabeçalho ── */}
                 <thead className="sticky top-0 z-20">
                   <tr>
-                    {/* Coluna fixa: nome */}
                     <th className="sticky left-0 z-30 bg-[#005c2b] border-r border-[#004d23] px-4 py-3 text-left text-xs font-bold text-white min-w-[220px] max-w-[260px]">
                       CAPEX (R$ Mil)
                     </th>
-                    {/* Meses */}
                     {MONTHS.map((m, idx) => (
                       <th key={idx}
                         className={`border-r border-[#004d23] px-3 py-3 text-center text-xs font-bold text-white min-w-[100px] whitespace-nowrap ${
@@ -489,27 +472,21 @@ export function CapexTable() {
                         )}
                       </th>
                     ))}
-                    {/* Melhor Visão */}
                     <th className="bg-[#b8860b] border-r border-amber-700 px-3 py-3 text-center text-xs font-bold text-white min-w-[110px] whitespace-nowrap">
                       MELHOR VISÃO
                     </th>
-                    {/* Meta */}
                     <th className="bg-slate-600 border-r border-slate-500 px-3 py-3 text-center text-xs font-bold text-white min-w-[100px] whitespace-nowrap">
                       META
                     </th>
-                    {/* Transferência */}
-                    <th className="bg-indigo-700 border-r border-indigo-600 px-3 py-3 text-center text-xs font-bold text-white min-w-[120px] whitespace-nowrap">
+                    <th className="bg-indigo-700 border-r border-indigo-600 px-3 py-3 text-center text-xs font-bold text-white min-w-[130px] whitespace-nowrap">
                       TRANSF. LÍQUIDA
                     </th>
-                    {/* Saldo */}
                     <th className="bg-slate-700 border-r border-slate-600 px-3 py-3 text-center text-xs font-bold text-white min-w-[110px] whitespace-nowrap">
                       SALDO
                     </th>
-                    {/* Status */}
                     <th className="bg-slate-800 border-r border-slate-700 px-3 py-3 text-center text-xs font-bold text-white min-w-[120px] whitespace-nowrap">
                       STATUS
                     </th>
-                    {/* Físico */}
                     <th className="bg-teal-700 px-3 py-3 text-center text-xs font-bold text-white min-w-[110px] whitespace-nowrap">
                       FÍSICO
                     </th>
@@ -518,20 +495,23 @@ export function CapexTable() {
 
                 <tbody className="divide-y divide-slate-100">
                   {visibleRows.map(row => {
-                    const rowIndex    = data.findIndex(d => d.capex === row.capex);
-                    const isSubLevel  = row.sublevel === 1;
-                    const isPlano     = row.sublevel === undefined;
-                    const isExpanded  = isPlano && expandedPlans.has(row.label);
-                    const total       = calculateTotal(row.cells);
-                    const net         = row.transferNet ?? 0;
-                    const metaVal     = row.meta ?? 0;
-                    const saldo       = metaVal - total + net;
+                    const rowIndex     = data.findIndex(d => d.capex === row.capex);
+                    const isSubLevel   = row.sublevel === 1;
+                    const isPlano      = row.sublevel === undefined;
+                    const isExpanded   = isPlano && expandedPlans.has(row.label);
+                    const total        = calculateTotal(row.cells);
+                    const net          = row.transferNet ?? 0;
+                    const metaVal      = row.meta ?? 0;
+                    const saldo        = metaVal - total + net;
                     const incomingList = isSubLevel ? (incomingIndex[row.label] ?? []) : [];
-                    const canEditRow  = isSubLevel && canEditRowLabel(row);
-                    const isSaving    = rowIndex !== -1 ? savingState[rowIndex] === true : false;
+                    const canEditRow   = isSubLevel && canEditRowLabel(row);
+                    const isSaving     = rowIndex !== -1 ? savingState[rowIndex] === true : false;
 
-                    // Cor de fundo da linha
-                    const rowBg = isPlano ? "bg-slate-50" : "bg-white";
+                    const outgoingTransfers = rowIndex !== -1 ? (data[rowIndex]?.transfers ?? []) : [];
+                    const incomingCount     = incomingList.length;
+                    const outgoingCount     = outgoingTransfers.length;
+
+                    const rowBg    = isPlano ? "bg-slate-50" : "bg-white";
                     const rowHover = "hover:bg-green-50/40 transition-colors";
 
                     return (
@@ -562,12 +542,9 @@ export function CapexTable() {
                           const isLocked   = row.status_capex === 'FINALIZADO';
                           const isPrevisto = editableMonths.has(cellIndex);
                           const val        = typeof cell.value === "number" ? cell.value : 0;
-
                           return (
                             <td key={cellIndex}
-                              className={`border-r border-slate-100 px-2 py-2 text-center min-w-[100px] ${
-                                isPrevisto ? "bg-green-50" : "bg-blue-50/60"
-                              }`}>
+                              className={`border-r border-slate-100 px-2 py-2 text-center min-w-[100px] ${isPrevisto ? "bg-green-50" : "bg-blue-50/60"}`}>
                               {isEditable ? (
                                 <input type="number"
                                   value={val === 0 ? "" : val}
@@ -605,16 +582,58 @@ export function CapexTable() {
                             <span className={`text-xs font-bold ${net > 0 ? "text-emerald-700" : net < 0 ? "text-red-600" : "text-slate-500"}`}>
                               {fmtSg(net)}
                             </span>
+
                             {isSubLevel && rowIndex !== -1 && data[rowIndex] && (
-                              <details className="relative">
-                                <summary className="cursor-pointer text-[10px] text-indigo-500 hover:text-indigo-700 select-none list-none flex items-center gap-0.5">
-                                  <ArrowRightLeft size={9} />detalhes
+                              <details className="relative w-full">
+                                {/* ══ Summary: badge entrada (esquerda) · "detalhes" (centro) · badge saída (direita) ══ */}
+                                <summary className="cursor-pointer select-none list-none">
+                                  <div className="flex items-center justify-between w-full mt-0.5 px-0.5">
+
+                                    {/* Esquerda: badge entradas */}
+                                    <div className="w-6 flex justify-start">
+                                      {incomingCount > 0 ? (
+                                        <span className="inline-flex items-center text-[9px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-full px-1.5 py-px leading-none">
+                                          +{incomingCount}
+                                        </span>
+                                      ) : (
+                                        <span className="w-4" /> /* placeholder para manter centralizado */
+                                      )}
+                                    </div>
+
+                                    {/* Centro: label "detalhes" */}
+                                    <span className="text-[10px] text-indigo-400 hover:text-indigo-600 flex items-center gap-0.5 transition-colors">
+                                      <ArrowRightLeft size={9} />
+                                      detalhes
+                                    </span>
+
+                                    {/* Direita: badge saídas */}
+                                    <div className="w-6 flex justify-end">
+                                      {outgoingCount > 0 ? (
+                                        <span className="inline-flex items-center text-[9px] font-bold bg-rose-100 text-rose-600 border border-rose-200 rounded-full px-1.5 py-px leading-none">
+                                          -{outgoingCount}
+                                        </span>
+                                      ) : (
+                                        <span className="w-4" /> /* placeholder */
+                                      )}
+                                    </div>
+
+                                  </div>
                                 </summary>
+
+                                {/* ══ Dropdown ══ */}
                                 <div className="absolute right-0 mt-2 w-[500px] bg-white border border-slate-200 rounded-xl shadow-xl p-4 z-30 text-left">
                                   <div className="grid grid-cols-2 gap-4">
+
                                     {/* Entradas */}
                                     <div>
-                                      <h4 className="text-xs font-semibold text-emerald-700 mb-2">Entradas</h4>
+                                      <h4 className="text-xs font-semibold text-emerald-700 mb-2 flex items-center gap-1.5">
+                                        Entradas
+                                        {incomingCount > 0 && (
+                                          <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-full px-1.5 py-px">
+                                            {incomingCount}
+                                          </span>
+                                        )}
+                                      </h4>
                                       <div className="max-h-48 overflow-auto space-y-1.5">
                                         {incomingList.length > 0 ? incomingList.map((inc, i) => (
                                           <div key={i} className="flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-lg px-2.5 py-1.5">
@@ -624,11 +643,19 @@ export function CapexTable() {
                                         )) : <p className="text-[11px] text-slate-400">Sem entradas.</p>}
                                       </div>
                                     </div>
+
                                     {/* Saídas */}
                                     <div>
-                                      <h4 className="text-xs font-semibold text-red-600 mb-2">Saídas</h4>
+                                      <h4 className="text-xs font-semibold text-red-600 mb-2 flex items-center gap-1.5">
+                                        Saídas
+                                        {outgoingCount > 0 && (
+                                          <span className="text-[10px] font-bold bg-rose-100 text-rose-600 border border-rose-200 rounded-full px-1.5 py-px">
+                                            {outgoingCount}
+                                          </span>
+                                        )}
+                                      </h4>
                                       <div className="max-h-48 overflow-auto space-y-1.5">
-                                        {(data[rowIndex].transfers ?? []).map(t => (
+                                        {outgoingTransfers.map(t => (
                                           <div key={t.id} className="grid grid-cols-12 gap-1.5 items-end">
                                             <div className="col-span-5">
                                               <label className="text-[10px] text-slate-400">Valor</label>
@@ -654,7 +681,9 @@ export function CapexTable() {
                                             </div>
                                           </div>
                                         ))}
-                                        {!(data[rowIndex].transfers?.length) && <p className="text-[11px] text-slate-400">Sem saídas.</p>}
+                                        {outgoingCount === 0 && (
+                                          <p className="text-[11px] text-slate-400">Sem saídas.</p>
+                                        )}
                                       </div>
                                       <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between">
                                         <button onClick={() => addTransfer(rowIndex)} disabled={!canEditRow || isSaving}
@@ -668,6 +697,7 @@ export function CapexTable() {
                                       </div>
                                     </div>
                                   </div>
+
                                   <p className="mt-3 pt-2 border-t border-slate-100 text-[11px] text-slate-600">
                                     Líquido:{" "}
                                     <span className={`font-bold ${net > 0 ? "text-emerald-700" : net < 0 ? "text-red-600" : "text-slate-700"}`}>
@@ -676,6 +706,10 @@ export function CapexTable() {
                                   </p>
                                 </div>
                               </details>
+                            )}
+
+                            {isPlano && net !== 0 && (
+                              <span className="text-[10px] text-slate-400">consolidado</span>
                             )}
                           </div>
                         </td>
@@ -723,8 +757,8 @@ export function CapexTable() {
                                     ? "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
                                     : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
                               }`}>
-                              {row.status_fisico === 'SIM' && <CheckCircle2 size={11} />}
-                              {row.status_fisico === 'NAO' && <XCircle size={11} />}
+                              {row.status_fisico === 'SIM'                              && <CheckCircle2 size={11} />}
+                              {row.status_fisico === 'NAO'                              && <XCircle size={11} />}
                               {(!row.status_fisico || row.status_fisico === 'PENDENTE') && <Database size={11} />}
                               Detalhar
                             </button>
@@ -758,6 +792,12 @@ export function CapexTable() {
             <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
               Saldo = META − Melhor Visão + Transf. Líquida
             </span>
+            <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
+              <span className="inline-flex items-center text-[9px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-full px-1.5 py-px mr-0.5">+N</span>
+              entradas /
+              <span className="inline-flex items-center text-[9px] font-bold bg-rose-100 text-rose-600 border border-rose-200 rounded-full px-1.5 py-px ml-0.5">-N</span>
+              saídas de transferência
+            </span>
           </div>
         </div>
       </div>
@@ -767,7 +807,6 @@ export function CapexTable() {
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMapOpen(false)} />
           <div className="relative bg-white w-[92vw] max-w-6xl max-h-[88vh] rounded-2xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col">
-            {/* Header */}
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-slate-50">
               <div className="flex items-center gap-3">
                 <ArrowRightLeft size={16} className="text-indigo-600" />
@@ -792,7 +831,6 @@ export function CapexTable() {
               </div>
             </div>
 
-            {/* Tabs */}
             <div className="flex gap-2 px-5 pt-3">
               {(["matrix", "list"] as const).map(tab => (
                 <button key={tab} onClick={() => setMapTab(tab)}
@@ -804,7 +842,6 @@ export function CapexTable() {
               ))}
             </div>
 
-            {/* Body */}
             <div className="flex-1 overflow-auto px-5 py-3">
               {mapTab === "matrix" ? (
                 <table className="border-collapse text-xs">
@@ -814,9 +851,7 @@ export function CapexTable() {
                         Origem ↓ / Destino →
                       </th>
                       {filtered.labels.map((dest, j) => (
-                        <th key={j} className="border border-slate-200 px-2 py-1.5 text-slate-600 font-medium max-w-[100px] truncate">
-                          {dest}
-                        </th>
+                        <th key={j} className="border border-slate-200 px-2 py-1.5 text-slate-600 font-medium max-w-[100px] truncate">{dest}</th>
                       ))}
                       <th className="border border-slate-200 px-2 py-1.5 bg-rose-50 text-rose-700 font-bold whitespace-nowrap">Saída total</th>
                       <th className="border border-slate-200 px-2 py-1.5 bg-slate-50 text-slate-700 font-bold whitespace-nowrap">Saldo líquido</th>
